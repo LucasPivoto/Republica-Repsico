@@ -911,6 +911,10 @@ body.is-admin .mascote { padding-top: 48px; }
 .miniatura-remover:hover { background: var(--accent); }
 .miniatura-remover .icone { width: 14px; height: 14px; }
 .mensagem { margin: 0; font-size: 1rem; overflow-wrap: anywhere; }
+.texto-divulgacao {
+  width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg); color: var(--text); font: 0.9rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical;
+}
 
 @media (min-width: 640px) {
   .rotulo-longo { display: inline; }

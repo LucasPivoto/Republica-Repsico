@@ -1229,16 +1229,18 @@
   }
 
   /* ---- Avisos (toasts) e área de transferência ---- */
-  function toast(mensagem, tipo) {
+  // duracao: ms até sumir (padrão 3,5 s); 0 = fica até ser removido por quem criou.
+  function toast(mensagem, tipo, duracao) {
     const el = document.createElement('div');
     el.className = 'toast' + (tipo === 'erro' ? ' toast-erro' : '');
     if (tipo === 'erro') el.setAttribute('role', 'alert');
     el.textContent = mensagem;
     document.getElementById('toasts').appendChild(el);
-    setTimeout(function () {
+    el.fechar = function () {
       el.classList.add('saindo');
       setTimeout(function () { el.remove(); }, 300);
-    }, 3500);
+    };
+    if (duracao !== 0) setTimeout(el.fechar, duracao || 3500);
     return el;
   }
 
@@ -2082,6 +2084,82 @@
     try { await store.reordenar(colecao, pares); } catch (e) { toast(mensagemErro(e), 'erro'); }
   }
 
+  /* ---- Texto de divulgação (WhatsApp) ---- */
+  function urlSite() {
+    return /^https?:$/.test(location.protocol) ? location.origin + location.pathname : '';
+  }
+
+  async function copiarDivulgacao() {
+    const texto = gerarTextoDivulgacao(estado.conteudo, urlSite());
+    if (await copiarTexto(texto)) {
+      toast('Texto de divulgação copiado!');
+      return;
+    }
+    const el = document.getElementById('modal-texto');
+    el.innerHTML = cabecalhoModal('titulo-texto', 'Texto de divulgação') +
+      '<div class="modal-corpo"><p class="modal-intro">Não deu para copiar automaticamente. Selecione o texto abaixo e copie.</p>' +
+      '<textarea class="texto-divulgacao" rows="14" readonly>' + escapeHtml(texto) + '</textarea></div></div>';
+    abrirModal(el);
+    const area = el.querySelector('textarea');
+    area.focus();
+    area.select();
+  }
+
+  /* ---- Backup (Plano B): exportar e importar tudo, fotos incluídas ---- */
+  function dataLocal() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  async function exportarBackup() {
+    try {
+      const conteudo = clonar(estado.conteudo);
+      const imagens = {};
+      for (const id of coletarIdsImagens(conteudo)) {
+        const url = await store.lerImagem(id);
+        if (url) imagens[id] = url;
+      }
+      const dados = { app: 'repsico', formato: 1, exportadoEm: new Date().toISOString(), conteudo: conteudo, imagens: imagens };
+      const url = URL.createObjectURL(new Blob([JSON.stringify(dados)], { type: 'application/json' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'repsico-backup-' + dataLocal() + '.json';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+      toast('Backup exportado!');
+    } catch (e) {
+      console.error(e);
+      toast(mensagemErro(e), 'erro');
+    }
+  }
+
+  async function importarBackup(arquivo) {
+    let dados = null;
+    try { dados = JSON.parse(await arquivo.text()); } catch (e) { dados = null; }
+    if (!ehObjeto(dados) || dados.app !== 'repsico' || dados.formato !== 1 || !ehObjeto(dados.conteudo)) {
+      toast('Arquivo de backup inválido.', 'erro');
+      return;
+    }
+    const ok = await confirmar('Isto substitui TODO o conteúdo atual do site. Continuar?',
+      { titulo: 'Importar backup', textoSim: 'Substituir tudo' });
+    if (!ok) return;
+    const progresso = toast('Importando backup…', 'ok', 0);
+    try {
+      await store.substituirTudo(dados.conteudo, ehObjeto(dados.imagens) ? dados.imagens : {}, function (feitos, total) {
+        progresso.textContent = 'Enviando fotos ' + feitos + '/' + total;
+      });
+      imagensProntas.clear();
+      progresso.fechar();
+      toast('Backup importado!');
+    } catch (e) {
+      console.error(e);
+      progresso.fechar();
+      toast(mensagemErro(e), 'erro');
+    }
+  }
+
   async function adicionarFotosGaleria(arquivos) {
     let adicionadas = 0;
     let ordem = proximaOrdem(estado.conteudo.galeria);
@@ -2153,6 +2231,9 @@
     editar: function (alvo) { abrirFormularioColecao(alvo.dataset.colecao, alvo.dataset.id); },
     excluir: function (alvo) { excluirDaColecao(alvo.dataset.colecao, alvo.dataset.id); },
     mover: function (alvo) { moverNaColecao(alvo.dataset.colecao, alvo.dataset.id, Number(alvo.dataset.direcao) || 1); },
+    'copiar-divulgacao': copiarDivulgacao,
+    'exportar-backup': exportarBackup,
+    'importar-backup': function () { document.getElementById('arquivo-backup').click(); },
     'confirmar-sim': function () { responderConfirmacao(true); },
     'confirmar-nao': function () { responderConfirmacao(false); },
     'remover-imagem': function (alvo) {
@@ -2221,6 +2302,11 @@
     document.addEventListener('change', function (ev) {
       if (ev.target.id === 'toggle-vagas') alternarVagas(ev.target.checked);
       if (ev.target.id === 'input-galeria') adicionarFotosGaleria(Array.from(ev.target.files));
+      if (ev.target.id === 'arquivo-backup') {
+        const arquivo = ev.target.files[0];
+        ev.target.value = '';
+        if (arquivo) importarBackup(arquivo);
+      }
     });
     document.addEventListener('scroll', function (ev) {
       if (ev.target.classList && ev.target.classList.contains('evento-fotos')) atualizarPontosEvento(ev.target);
