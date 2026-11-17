@@ -730,6 +730,199 @@
     };
   }
 
+  /* ---- Firebase (Firestore + Authentication) ---- */
+
+  function comTimeout(promessa, ms) {
+    return Promise.race([promessa, new Promise(function (_, falha) {
+      setTimeout(function () { falha(erroCom('offline')); }, ms);
+    })]);
+  }
+
+  function lerCache() {
+    try { const texto = lerLocal(CHAVE_CACHE); return texto ? JSON.parse(texto) : null; } catch (e) { return null; }
+  }
+
+  function gravarCache(conteudo) {
+    try { localStorage.setItem(CHAVE_CACHE, JSON.stringify(conteudo)); } catch (e) { /* cache é opcional */ }
+  }
+
+  async function carregarFirebase() {
+    const base = 'https://www.gstatic.com/firebasejs/' + FIREBASE_VERSAO + '/';
+    const modulos = await comTimeout(Promise.all([
+      import(base + 'firebase-app.js'),
+      import(base + 'firebase-firestore.js'),
+      import(base + 'firebase-auth.js')
+    ]), 10000);
+    return { app: modulos[0], fs: modulos[1], auth: modulos[2] };
+  }
+
+  // Texto: documento único site/conteudo (gravações por campo). Fotos: imagens/{id}.
+  async function criarStoreFirebase(cfg, emulador) {
+    const sdk = await carregarFirebase();
+    const F = sdk.fs;
+    const A = sdk.auth;
+    const app = sdk.app.initializeApp(cfg);
+    const db = F.getFirestore(app);
+    const auth = A.initializeAuth(app, { persistence: [A.indexedDBLocalPersistence, A.browserLocalPersistence, A.inMemoryPersistence] });
+    if (emulador) {
+      F.connectFirestoreEmulator(db, emulador.firestore.host, emulador.firestore.porta);
+      A.connectAuthEmulator(auth, emulador.auth, { disableWarnings: true });
+    }
+    await comTimeout(auth.authStateReady(), 10000);
+
+    const ref = F.doc(db, 'site', 'conteudo');
+    const pedidos = new Map();
+    let conteudo = normalizar(lerCache());
+    let aoMudar = function () {};
+
+    function limpo(v) { return JSON.parse(JSON.stringify(v)); }
+    function ehMorador(usuario) {
+      return !!usuario && String(usuario.email || '').toLowerCase() === EMAIL_MORADORES.toLowerCase();
+    }
+    function refImagem(id) { return F.doc(db, 'imagens', id); }
+
+    async function garantirDocumento() {
+      const snap = await F.getDoc(ref);
+      if (!snap.exists()) await F.setDoc(ref, limpo(normalizar(null)));
+    }
+
+    async function atualizar(campos) {
+      try {
+        await F.updateDoc(ref, campos);
+      } catch (e) {
+        if (!e || e.code !== 'not-found') throw e;
+        await garantirDocumento();
+        await F.updateDoc(ref, campos);
+      }
+    }
+
+    return {
+      modo: 'firebase',
+      auth: {
+        entrar: async function (senha) {
+          await A.signInWithEmailAndPassword(auth, EMAIL_MORADORES, String(senha || ''));
+          await garantirDocumento();
+        },
+        sair: function () { return A.signOut(auth); },
+        logado: function () { return ehMorador(auth.currentUser); },
+        aoMudar: function (cb) { A.onAuthStateChanged(auth, function (u) { cb(ehMorador(u)); }); },
+        trocarSenha: async function (nova) {
+          if (String(nova || '').length < 6) throw erroCom('senha-fraca');
+          if (!auth.currentUser) throw erroCom('permission-denied');
+          await A.updatePassword(auth.currentUser, String(nova));
+        }
+      },
+      iniciar: function (cb) {
+        aoMudar = cb || function () {};
+        return new Promise(function (resolver) {
+          let pronto = false;
+          function terminar() {
+            if (pronto) return;
+            pronto = true;
+            resolver();
+          }
+          F.onSnapshot(ref, function (snap) {
+            conteudo = normalizar(snap.exists() ? snap.data() : null);
+            if (snap.exists()) gravarCache(conteudo);
+            aoMudar(conteudo);
+            terminar();
+          }, function (erro) {
+            console.warn('Não foi possível ler o conteúdo do Firestore:', erro);
+            if (!pronto) aoMudar(conteudo);
+            terminar();
+          });
+          // Sem resposta em 3 s (rede lenta), mostra o último conteúdo conhecido.
+          setTimeout(function () {
+            if (!pronto) aoMudar(conteudo);
+            terminar();
+          }, 3000);
+        });
+      },
+      obter: function () { return conteudo; },
+      salvarItem: async function (colecao, id, dados) {
+        validarAlvo(colecao, id);
+        const campos = {};
+        campos[colecao + '.' + id] = limpo(normalizarItem(colecao, dados, 0));
+        await atualizar(campos);
+      },
+      excluirItem: async function (colecao, id) {
+        validarAlvo(colecao, id);
+        const campos = {};
+        campos[colecao + '.' + id] = F.deleteField();
+        await atualizar(campos);
+      },
+      salvarConfig: async function (parcial) {
+        const campos = {};
+        Object.keys(parcial || {}).forEach(function (k) { campos['config.' + k] = limpo(parcial[k]); });
+        await atualizar(campos);
+      },
+      reordenar: async function (colecao, pares) {
+        const campos = {};
+        (pares || []).forEach(function (par) {
+          if (conteudo[colecao] && conteudo[colecao][par[0]]) campos[colecao + '.' + par[0] + '.ordem'] = par[1];
+        });
+        if (Object.keys(campos).length) await atualizar(campos);
+      },
+      salvarImagem: async function (dataUrl) {
+        if (!ehDataUrlImagem(dataUrl)) throw erroCom('formato-imagem');
+        const id = gerarId();
+        await F.setDoc(refImagem(id), { data: dataUrl, criadoEm: F.serverTimestamp() });
+        return id;
+      },
+      lerImagem: function (id) {
+        if (!pedidos.has(id)) {
+          pedidos.set(id, F.getDoc(refImagem(id)).then(function (s) {
+            return s.exists() ? s.data().data : null;
+          }).catch(function (e) {
+            console.warn('Imagem indisponível:', id, e);
+            return null;
+          }).finally(function () { pedidos.delete(id); }));
+        }
+        return pedidos.get(id);
+      },
+      excluirImagem: function (id) { return F.deleteDoc(refImagem(id)); },
+      substituirTudo: async function (novoConteudo, mapaImagens, aoProgresso) {
+        const novo = normalizar(novoConteudo);
+        const antigas = coletarIdsImagens(conteudo);
+        const ids = Object.keys(mapaImagens || {}).filter(function (id) {
+          return /^[A-Za-z0-9_-]+$/.test(id) && ehDataUrlImagem(mapaImagens[id]);
+        });
+        let feitos = 0;
+        for (let i = 0; i < ids.length; i += 3) {
+          await Promise.all(ids.slice(i, i + 3).map(async function (id) {
+            await F.setDoc(refImagem(id), { data: mapaImagens[id], criadoEm: F.serverTimestamp() });
+            feitos++;
+            if (aoProgresso) aoProgresso(feitos, ids.length);
+          }));
+        }
+        await F.setDoc(ref, limpo(novo));
+        const usadas = new Set(coletarIdsImagens(novo));
+        for (const id of antigas) {
+          if (!usadas.has(id)) await F.deleteDoc(refImagem(id)).catch(function () { /* já não existia */ });
+        }
+      }
+    };
+  }
+
+  // Firebase configurado mas fora do ar: mostra o último conteúdo conhecido, sem edição.
+  function criarStoreIndisponivel(conteudo) {
+    function recusar() { return Promise.reject(erroCom('offline')); }
+    return {
+      modo: 'offline',
+      auth: { entrar: recusar, sair: async function () {}, logado: function () { return false; }, aoMudar: function () {}, trocarSenha: recusar },
+      iniciar: async function (cb) { if (cb) cb(conteudo); },
+      obter: function () { return conteudo; },
+      salvarItem: recusar, excluirItem: recusar, salvarConfig: recusar, reordenar: recusar,
+      salvarImagem: recusar, lerImagem: async function () { return null; }, excluirImagem: recusar, substituirTudo: recusar
+    };
+  }
+
+  function configuracaoFirebase() {
+    const emulador = window.__REPSICO_EMULADOR__ || null;
+    const cfg = (emulador && emulador.firebaseConfig) || firebaseConfig;
+    return { cfg: cfg, emulador: emulador, ativo: !!(cfg && cfg.apiKey && cfg.projectId) };
+  }
+
   /* ======================================================================
      7. RENDERIZAÇÃO
      ====================================================================== */
@@ -2311,7 +2504,22 @@
     document.addEventListener('scroll', function (ev) {
       if (ev.target.classList && ev.target.classList.contains('evento-fotos')) atualizarPontosEvento(ev.target);
     }, true);
-    store = criarStoreLocal();
+    const fb = configuracaoFirebase();
+    if (fb.ativo) {
+      const cache = lerCache();
+      if (cache) {
+        estado.conteudo = normalizar(cache);
+        renderizarTudo();
+      }
+      try {
+        store = await criarStoreFirebase(fb.cfg, fb.emulador);
+      } catch (erro) {
+        console.warn('Firebase indisponível; mostrando o último conteúdo conhecido.', erro);
+        store = criarStoreIndisponivel(normalizar(cache));
+      }
+    } else {
+      store = criarStoreLocal();
+    }
     await store.iniciar(function (c) {
       estado.conteudo = c;
       renderizarTudo();
