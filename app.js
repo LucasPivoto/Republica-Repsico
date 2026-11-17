@@ -705,6 +705,9 @@
     renderCasa();
     renderMoradores();
     renderEventos();
+    renderLocalizacao();
+    renderFaq();
+    renderRodape();
     hidratarImagens(document);
   }
 
@@ -1063,6 +1066,82 @@
     });
   }
 
+  /* ---- Localização, contatos, FAQ e rodapé ---- */
+  function enderecoCompleto() {
+    const e = estado.conteudo.config.endereco;
+    return [e.rua, e.cidade].filter(Boolean).join(', ');
+  }
+
+  function renderLocalizacao() {
+    const e = estado.conteudo.config.endereco;
+    const endereco = enderecoCompleto();
+    const q = encodeURIComponent(endereco);
+    document.querySelector('#localizacao .card-endereco').innerHTML =
+      '<span class="icone-bolha">' + icone('pin') + '</span>' +
+      '<div class="endereco-texto">' +
+        '<p class="endereco">' + escapeHtml(endereco) + '</p>' +
+        (e.distancias ? '<span class="selo-distancias">' + escapeHtml(e.distancias) + '</span>' : '') +
+      '</div>' +
+      '<div class="endereco-acoes">' +
+        '<button type="button" class="btn btn-secundario btn-pequeno" data-acao="copiar-endereco">' + icone('copiar') + 'Copiar endereço</button>' +
+        '<a class="btn btn-secundario btn-pequeno link-maps" href="https://www.google.com/maps/search/?api=1&amp;query=' + q +
+          '" target="_blank" rel="noopener">' + icone('mapa') + 'Abrir no Google Maps</a>' +
+      '</div>';
+    const mapa = document.querySelector('#localizacao iframe.mapa');
+    const src = 'https://www.google.com/maps?q=' + q + '&output=embed';
+    if (mapa.getAttribute('src') !== src) mapa.setAttribute('src', src);
+
+    const contatos = listar(estado.conteudo, 'contatos');
+    document.getElementById('lista-contatos').innerHTML = contatos.length ? contatos.map(function (ct) {
+      const titulo = ct.apelido || ct.nome;
+      const link = waLink(ct.telefone, mensagemWhatsApp(ct));
+      return '<article class="card-contato">' +
+        '<span class="contato-avatar" aria-hidden="true">' + escapeHtml(iniciais(titulo)) + '</span>' +
+        '<div class="contato-info">' +
+          '<h4 class="contato-apelido">' + escapeHtml(titulo) + '</h4>' +
+          (ct.apelido && ct.nome ? '<p class="contato-nome">' + escapeHtml(ct.nome) + '</p>' : '') +
+          '<p class="contato-telefone">' + escapeHtml(ct.telefone) + '</p>' +
+        '</div>' +
+        (link ? '<a class="btn btn-primario btn-pequeno btn-whatsapp" href="' + escapeHtml(link) + '" target="_blank" rel="noopener" aria-label="Chamar ' +
+          escapeHtml(titulo) + ' no WhatsApp">' + icone('whatsapp') + '<span>WhatsApp</span></a>' : '') +
+      '</article>';
+    }).join('') : '<p class="vazio">Nenhum contato cadastrado ainda.</p>';
+  }
+
+  function renderFaq() {
+    const itens = listar(estado.conteudo, 'faq');
+    document.getElementById('lista-faq').innerHTML = itens.length ? itens.map(function (f) {
+      return '<details class="faq-item">' +
+        '<summary><span class="faq-pergunta">' + escapeHtml(f.pergunta) + '</span>' + icone('seta-baixo', 'faq-seta') + '</summary>' +
+        '<div class="faq-resposta"><p>' + escapeHtml(f.resposta) + '</p></div>' +
+      '</details>';
+    }).join('') : '<p class="vazio">Nenhuma pergunta cadastrada ainda.</p>';
+  }
+
+  function renderRodape() {
+    const ig = estado.conteudo.config.instagram;
+    document.querySelector('.rodape-conteudo').innerHTML =
+      '<div class="rodape-coluna">' +
+        '<h3 class="rodape-titulo">Contato</h3>' +
+        '<p class="rodape-endereco">' + icone('pin') + '<span>' + escapeHtml(enderecoCompleto()) + '</span></p>' +
+        (ig ? '<a class="rodape-instagram" href="https://instagram.com/' + escapeHtml(ig) + '" target="_blank" rel="noopener">' +
+          icone('instagram') + '@' + escapeHtml(ig) + '</a>' : '') +
+      '</div>' +
+      '<nav class="rodape-coluna" aria-label="Seções (rodapé)">' +
+        '<h3 class="rodape-titulo">Navegação</h3>' +
+        '<ul class="rodape-links">' +
+          [['#home', 'Home'], ['#casa', 'A Casa'], ['#moradores', 'Moradores'], ['#eventos', 'Eventos &amp; Rolês'],
+            ['#localizacao', 'Localização'], ['#faq', 'FAQ']].map(function (l) {
+            return '<li><a href="' + l[0] + '">' + l[1] + '</a></li>';
+          }).join('') +
+        '</ul>' +
+      '</nav>' +
+      '<div class="rodape-base">' +
+        '<p class="copyright">© ' + new Date().getFullYear() + ' República REPSICO · Itajubá-MG</p>' +
+        '<button type="button" class="link-discreto admin-oculto" data-acao="abrir-login">' + icone('cadeado') + 'Área do Morador</button>' +
+      '</div>';
+  }
+
   /* ---- Faixa de status de vagas ---- */
   function renderVagas() {
     const el = document.getElementById('faixa-vagas');
@@ -1096,6 +1175,63 @@
     const novo = html.dataset.theme === 'dark' ? 'light' : 'dark';
     html.dataset.theme = novo;
     try { localStorage.setItem('repsico:tema', novo); } catch (e) { /* armazenamento indisponível */ }
+  }
+
+  /* ---- Avisos (toasts) e área de transferência ---- */
+  function toast(mensagem, tipo) {
+    const el = document.createElement('div');
+    el.className = 'toast' + (tipo === 'erro' ? ' toast-erro' : '');
+    if (tipo === 'erro') el.setAttribute('role', 'alert');
+    el.textContent = mensagem;
+    document.getElementById('toasts').appendChild(el);
+    setTimeout(function () {
+      el.classList.add('saindo');
+      setTimeout(function () { el.remove(); }, 300);
+    }, 3500);
+    return el;
+  }
+
+  async function copiarTexto(texto) {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(texto);
+        return true;
+      }
+    } catch (e) { /* tenta o método antigo */ }
+    try {
+      const area = document.createElement('textarea');
+      area.value = texto;
+      area.setAttribute('readonly', '');
+      area.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+      document.body.appendChild(area);
+      area.select();
+      const ok = document.execCommand('copy');
+      area.remove();
+      return ok;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Destaca na navbar o link da seção que cruza a faixa central da tela.
+  function ligarDestaqueNavegacao() {
+    if (!('IntersectionObserver' in window)) return;
+    const links = {};
+    document.querySelectorAll('.nav-links a').forEach(function (a) { links[a.getAttribute('href').slice(1)] = a; });
+    const observador = new IntersectionObserver(function (entradas) {
+      entradas.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        Object.keys(links).forEach(function (id) {
+          const ativo = id === e.target.id;
+          links[id].classList.toggle('ativo', ativo);
+          if (ativo) links[id].setAttribute('aria-current', 'true'); else links[id].removeAttribute('aria-current');
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px' });
+    Object.keys(links).forEach(function (id) {
+      const secao = document.getElementById(id);
+      if (secao) observador.observe(secao);
+    });
   }
 
   /* ---- Lightbox (galeria e rolês) ---- */
@@ -1225,6 +1361,10 @@
       const trilho = trilhoDoEvento(alvo);
       if (trilho) trilho.scrollTo({ left: Number(alvo.dataset.indice) * trilho.clientWidth, behavior: 'smooth' });
     },
+    'copiar-endereco': async function () {
+      const ok = await copiarTexto(enderecoCompleto());
+      if (ok) toast('Endereço copiado!'); else toast('Não foi possível copiar. Selecione o endereço e copie manualmente.', 'erro');
+    },
     'lightbox-fechar': fecharLightbox,
     'lightbox-anterior': function () { navegarLightbox(-1); },
     'lightbox-proximo': function () { navegarLightbox(1); }
@@ -1279,6 +1419,7 @@
     ligarNavegacao();
     ligarCarrossel();
     ligarLightbox();
+    ligarDestaqueNavegacao();
     document.addEventListener('scroll', function (ev) {
       if (ev.target.classList && ev.target.classList.contains('evento-fotos')) atualizarPontosEvento(ev.target);
     }, true);

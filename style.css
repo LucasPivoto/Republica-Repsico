@@ -631,6 +631,82 @@ img[data-img]:not([src]) { background: linear-gradient(110deg, var(--bg-card) 30
   .grid-moradores { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
+/* ---------- 5i. Localização e contatos ---------- */
+.local-grid { display: grid; gap: 24px; }
+.local-info { display: grid; gap: 24px; align-content: start; min-width: 0; }
+.card-endereco {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px 16px; align-items: start;
+  padding: 22px; border-radius: var(--raio); background: var(--bg-elevado); border: 1px solid var(--border);
+}
+.endereco { margin: 0 0 8px; font-family: var(--font-titulo); font-weight: 800; font-size: 1.2rem; line-height: 1.3; overflow-wrap: anywhere; }
+.selo-distancias {
+  display: inline-block; max-width: 100%; padding: 5px 12px; border-radius: 999px;
+  background: var(--accent); color: var(--branco); font-weight: 700; font-size: 0.85rem; overflow-wrap: anywhere;
+}
+.endereco-acoes { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.endereco-acoes .icone { width: 18px; height: 18px; }
+.lista-contatos { display: grid; gap: 12px; }
+.card-contato {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center;
+  padding: 14px 16px; border-radius: 16px; background: var(--bg-elevado); border: 1px solid var(--border);
+}
+.contato-avatar {
+  display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%;
+  background: var(--preto); color: var(--branco); font-family: var(--font-titulo); font-weight: 900;
+  box-shadow: 0 0 0 3px var(--accent);
+}
+.contato-info { min-width: 0; }
+.contato-apelido { margin: 0; font-size: 1.1rem; font-weight: 900; overflow-wrap: anywhere; }
+.contato-nome { margin: 0; color: var(--text-muted); font-size: 0.85rem; overflow-wrap: anywhere; }
+.contato-telefone { margin: 2px 0 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.card-contato .btn-whatsapp .icone { color: inherit; width: 18px; height: 18px; }
+.mapa-moldura {
+  position: relative; min-height: 320px; border-radius: var(--raio); overflow: hidden;
+  border: 1px solid var(--border); background: var(--bg-card);
+}
+.mapa { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+
+@media (max-width: 479px) {
+  .card-contato { grid-template-columns: auto minmax(0, 1fr); }
+  .card-contato .btn-whatsapp { grid-column: 1 / -1; }
+}
+@media (min-width: 900px) {
+  .local-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); align-items: stretch; }
+  .mapa-moldura { min-height: 460px; }
+}
+
+/* ---------- 5j. FAQ ---------- */
+.lista-faq { display: grid; gap: 12px; max-width: 860px; }
+.faq-item { border-radius: 16px; background: var(--bg-card); border: 1px solid var(--border); overflow: hidden; }
+.faq-item[open] { border-color: var(--accent); }
+.faq-item summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 18px 20px; cursor: pointer; list-style: none;
+  font-family: var(--font-titulo); font-weight: 800; font-size: 1.02rem;
+}
+.faq-item summary::-webkit-details-marker { display: none; }
+.faq-pergunta { min-width: 0; overflow-wrap: anywhere; }
+.faq-seta { flex: none; color: var(--accent-text); transition: transform var(--transicao); }
+.faq-item[open] .faq-seta { transform: rotate(180deg); }
+.faq-resposta { padding: 0 20px 18px; color: var(--text-muted); }
+.faq-resposta p { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
+.faq-item[open] .faq-resposta { animation: surgir 220ms ease; }
+@keyframes surgir { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+/* ---------- 5k. Avisos (toasts) ---------- */
+.toasts {
+  position: fixed; left: 50%; bottom: calc(var(--barra-h) + 16px); z-index: 400; transform: translateX(-50%);
+  display: grid; gap: 8px; width: min(92vw, 420px); pointer-events: none;
+}
+.toast {
+  padding: 12px 18px; border-radius: 12px; background: #121214; color: #FFFFFF;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); border-left: 4px solid #22C55E;
+  font-weight: 600; animation: surgir 200ms ease;
+  transition: opacity 300ms ease, transform 300ms ease;
+}
+.toast-erro { border-left-color: var(--accent-hover); }
+.toast.saindo { opacity: 0; transform: translateY(8px); }
+
 /* ---------- 5f. Lightbox ---------- */
 .lightbox { position: fixed; inset: 0; z-index: 300; display: grid; place-items: center; }
 .lightbox-fundo { position: absolute; inset: 0; background: rgba(8, 8, 10, 0.92); }
@@ -661,6 +737,34 @@ img[data-img]:not([src]) { background: linear-gradient(110deg, var(--bg-card) 30
 .rodape-marca strong { display: block; font-family: var(--font-titulo); font-weight: 900; font-size: 1.4rem; letter-spacing: 0.06em; color: var(--branco); }
 .rodape-marca span { font-size: 0.9rem; color: #A1A1AA; }
 .rodape a { color: var(--branco); }
+.rodape-conteudo { display: grid; gap: 28px; }
+.rodape-titulo {
+  margin: 0 0 12px; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: #FF4D6D;
+}
+.rodape-endereco { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 10px; overflow-wrap: anywhere; }
+.rodape-endereco span { min-width: 0; }
+.rodape-endereco .icone, .rodape-instagram .icone { width: 18px; height: 18px; margin-top: 3px; }
+.rodape-instagram { display: inline-flex; gap: 8px; align-items: center; font-weight: 700; text-decoration: none; overflow-wrap: anywhere; }
+.rodape-instagram:hover { color: #FF4D6D; }
+.rodape-links { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; }
+.rodape-links a { color: #D4D4D8; text-decoration: none; }
+.rodape-links a:hover { color: var(--branco); text-decoration: underline; }
+.rodape-base {
+  grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
+  padding-top: 20px; border-top: 1px solid #2C2C33;
+}
+.copyright { margin: 0; font-size: 0.85rem; color: #A1A1AA; }
+.link-discreto {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 0; border: 0; background: none;
+  color: #8B8B95; font-size: 0.82rem;
+}
+.link-discreto:hover { color: var(--branco); }
+.link-discreto .icone { width: 14px; height: 14px; }
+
+@media (min-width: 768px) {
+  .rodape-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); align-items: start; }
+  .rodape-conteudo { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
 
 /* ---------- 7. Diversos ---------- */
 .aviso-noscript {
