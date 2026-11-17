@@ -515,6 +515,45 @@
   }
 
   /* ======================================================================
+     5. IMAGENS — compressão no navegador (lado maior ≤ 800 px, JPEG 0.75)
+     ====================================================================== */
+
+  function decodificarImagem(blob) {
+    const viaImg = function () {
+      return new Promise(function (ok, falha) {
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = function () { URL.revokeObjectURL(url); ok(img); };
+        img.onerror = function () { URL.revokeObjectURL(url); falha(erroCom('formato-imagem')); };
+        img.src = url;
+      });
+    };
+    if (!window.createImageBitmap) return viaImg();
+    return createImageBitmap(blob, { imageOrientation: 'from-image' }).catch(viaImg);
+  }
+
+  async function comprimirImagem(arquivo, opcoes) {
+    const max = (opcoes && opcoes.max) || 800;
+    const qualidade = (opcoes && opcoes.qualidade) || 0.75;
+    let fonte;
+    try { fonte = await decodificarImagem(arquivo); } catch (e) { throw erroCom('formato-imagem'); }
+    const largura = fonte.naturalWidth || fonte.width;
+    const altura = fonte.naturalHeight || fonte.height;
+    if (!largura || !altura) throw erroCom('formato-imagem');
+    const escala = Math.min(1, max / Math.max(largura, altura));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(largura * escala));
+    canvas.height = Math.max(1, Math.round(altura * escala));
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(fonte, 0, 0, canvas.width, canvas.height);
+    if (fonte.close) fonte.close();
+    return canvas.toDataURL('image/jpeg', qualidade);
+  }
+
+  /* ======================================================================
      6. ARMAZENAMENTO
      Interface comum (store): modo, iniciar(aoMudar), obter(), salvarItem,
      excluirItem, salvarConfig, reordenar, salvarImagem, lerImagem,
@@ -708,6 +747,7 @@
     renderLocalizacao();
     renderFaq();
     renderRodape();
+    renderAcoesSecoes();
     atualizarBarraMorador();
     hidratarImagens(document);
   }
@@ -794,6 +834,7 @@
         (s.botaoTexto && link ? '<a class="btn btn-primario btn-hero" href="' + escapeHtml(link) + '"' +
           (externo ? ' target="_blank" rel="noopener"' : '') + '>' + escapeHtml(s.botaoTexto) + icone('seta-dir') + '</a>' : '') +
         (estado.admin && oculto ? '<span class="marcador-oculto">oculto: casa completa</span>' : '') +
+        controlesItem('slides', s.id, true) +
       '</div>' +
     '</article>';
   }
@@ -909,6 +950,7 @@
         '<span class="icone-bolha">' + icone(d.icone) + '</span>' +
         '<h3>' + escapeHtml(d.titulo) + '</h3>' +
         (d.texto ? '<p>' + escapeHtml(d.texto) + '</p>' : '') +
+        controlesItem('diferenciais', d.id, true) +
       '</article>';
     }).join('') +
       '<article class="card-casa card-equipe">' +
@@ -942,6 +984,7 @@
         '<button type="button" class="galeria-abrir" data-acao="abrir-galeria" data-indice="' + i + '" aria-label="Ampliar foto' +
           (g.legenda ? ': ' + escapeHtml(g.legenda) : ' ' + (i + 1)) + '">' + imgTag(g.imagem, g.legenda || 'Foto da casa') + '</button>' +
         (g.legenda ? '<figcaption>' + escapeHtml(g.legenda) + '</figcaption>' : '') +
+        controlesItem('galeria', g.id, true) +
       '</figure>';
     }).join('') : '<p class="vazio">Nenhuma foto ainda. Use “+ Adicionar fotos” para mostrar os ambientes da casa.</p>';
   }
@@ -965,6 +1008,7 @@
             '<div class="mascote-foto">' + (m.foto ? imgTag(m.foto, m.nome) : '<div class="placeholder-pata">' + icone('pata') + '</div>') + '</div>' +
             '<div class="mascote-texto"><h4 class="mascote-nome">' + escapeHtml(m.nome) + '</h4>' +
               (m.descricao ? '<p class="mascote-descricao">' + escapeHtml(m.descricao) + '</p>' : '') + '</div>' +
+            controlesItem('mascotes', m.id, true) +
           '</article>';
         }).join('') + '</div>' +
       '</div>';
@@ -1013,6 +1057,7 @@
             '" target="_blank" rel="noopener">' + icone('instagram') + '@' + escapeHtml(m.instagram) + '</a>' : '') +
         '</div>' : '') +
       '</div>' +
+      controlesItem('moradores', m.id, false) +
     '</article>';
   }
 
@@ -1048,6 +1093,7 @@
         '<h3 class="evento-titulo">' + escapeHtml(e.titulo) + '</h3>' +
         (e.descricao ? '<p class="evento-descricao">' + escapeHtml(e.descricao) + '</p>' : '') +
       '</div>' +
+      controlesItem('eventos', e.id, true) +
     '</article>';
   }
 
@@ -1107,6 +1153,7 @@
         '</div>' +
         (link ? '<a class="btn btn-primario btn-pequeno btn-whatsapp" href="' + escapeHtml(link) + '" target="_blank" rel="noopener" aria-label="Chamar ' +
           escapeHtml(titulo) + ' no WhatsApp">' + icone('whatsapp') + '<span>WhatsApp</span></a>' : '') +
+        controlesItem('contatos', ct.id, true) +
       '</article>';
     }).join('') : '<p class="vazio">Nenhum contato cadastrado ainda.</p>';
   }
@@ -1115,7 +1162,8 @@
     const itens = listar(estado.conteudo, 'faq');
     document.getElementById('lista-faq').innerHTML = itens.length ? itens.map(function (f) {
       return '<details class="faq-item">' +
-        '<summary><span class="faq-pergunta">' + escapeHtml(f.pergunta) + '</span>' + icone('seta-baixo', 'faq-seta') + '</summary>' +
+        '<summary><span class="faq-pergunta">' + escapeHtml(f.pergunta) + '</span>' + controlesItem('faq', f.id, true) +
+          icone('seta-baixo', 'faq-seta') + '</summary>' +
         '<div class="faq-resposta"><p>' + escapeHtml(f.resposta) + '</p></div>' +
       '</details>';
     }).join('') : '<p class="vazio">Nenhuma pergunta cadastrada ainda.</p>';
@@ -1416,8 +1464,118 @@
     return '<label class="campo"><span class="campo-rotulo">' + escapeHtml(c.rotulo) + obrig + '</span>' + controle + ajuda + erro + '</label>';
   }
 
-  // Campos com comportamento próprio (fotos) entram aqui na etapa de cadastros.
-  const CAMPOS_ESPECIAIS = {};
+  // Campos de foto: comprimem no navegador e guardam { manter: id } | { novo: dataUrl } | null.
+  function htmlPrevia(item) {
+    if (!item) return '<div class="previa-vazia">' + icone('imagem') + '<span>Sem foto</span></div>';
+    if (item.manter) return imgTag(item.manter, 'Prévia da foto');
+    return '<img alt="Prévia da foto">';
+  }
+
+  function aplicarPrevias(raiz, itens) {
+    raiz.querySelectorAll('img:not([data-img])').forEach(function (img, i) {
+      const novos = itens.filter(function (x) { return x && x.novo; });
+      if (novos[i]) img.src = novos[i].novo;
+    });
+    hidratarImagens(raiz);
+  }
+
+  const CAMPOS_ESPECIAIS = {
+    imagem: {
+      html: function (c) {
+        return '<div class="campo campo-imagem" data-campo-imagem="' + escapeHtml(c.nome) + '">' +
+          '<span class="campo-rotulo">' + escapeHtml(c.rotulo) + (c.obrigatorio ? ' <span class="obrigatorio" aria-hidden="true">*</span>' : '') + '</span>' +
+          '<div class="previa-imagem"></div>' +
+          '<div class="campo-imagem-acoes">' +
+            '<label class="btn btn-secundario btn-pequeno">' + icone('imagem') + '<span>Escolher foto</span>' +
+              '<input type="file" accept="image/*" data-campo="' + escapeHtml(c.nome) + '" class="sr-only"></label>' +
+            '<button type="button" class="btn btn-secundario btn-pequeno" data-acao="remover-imagem" data-campo="' + escapeHtml(c.nome) + '">' +
+              icone('lixeira') + 'Remover</button>' +
+          '</div>' +
+          (c.ajuda ? '<span class="campo-ajuda">' + escapeHtml(c.ajuda) + '</span>' : '') +
+          '<span class="status-imagem" aria-live="polite"></span>' +
+          '<span class="erro-campo" data-erro="' + escapeHtml(c.nome) + '" hidden></span>' +
+        '</div>';
+      },
+      ligar: function (form, c, valores) {
+        const caixa = form.querySelector('[data-campo-imagem="' + c.nome + '"]');
+        const id = lerCaminho(valores, c.nome);
+        caixa.valorAtual = id ? { manter: id } : null;
+        caixa.desenhar = function () {
+          const previa = caixa.querySelector('.previa-imagem');
+          previa.innerHTML = htmlPrevia(caixa.valorAtual);
+          aplicarPrevias(previa, [caixa.valorAtual]);
+          caixa.querySelector('[data-acao="remover-imagem"]').hidden = !caixa.valorAtual;
+        };
+        caixa.desenhar();
+        caixa.querySelector('input[type="file"]').addEventListener('change', async function (ev) {
+          const arquivo = ev.target.files[0];
+          ev.target.value = '';
+          if (!arquivo) return;
+          const status = caixa.querySelector('.status-imagem');
+          status.textContent = 'Comprimindo…';
+          try {
+            caixa.valorAtual = { novo: await comprimirImagem(arquivo) };
+            caixa.desenhar();
+          } catch (e) {
+            toast(mensagemErro(e), 'erro');
+          } finally {
+            status.textContent = '';
+          }
+        });
+      },
+      valor: function (form, c) {
+        return form.querySelector('[data-campo-imagem="' + c.nome + '"]').valorAtual || null;
+      }
+    },
+    imagens: {
+      html: function (c) {
+        return '<div class="campo campo-imagens" data-campo-imagens="' + escapeHtml(c.nome) + '">' +
+          '<span class="campo-rotulo">' + escapeHtml(c.rotulo) + '</span>' +
+          '<div class="miniaturas"></div>' +
+          '<div class="campo-imagem-acoes"><label class="btn btn-secundario btn-pequeno">' + icone('mais') + '<span>Adicionar fotos</span>' +
+            '<input type="file" accept="image/*" multiple data-campo="' + escapeHtml(c.nome) + '" class="sr-only"></label></div>' +
+          '<span class="campo-ajuda">Até ' + (c.max || 12) + ' fotos. Elas são comprimidas antes de salvar.</span>' +
+          '<span class="status-imagem" aria-live="polite"></span>' +
+          '<span class="erro-campo" data-erro="' + escapeHtml(c.nome) + '" hidden></span>' +
+        '</div>';
+      },
+      ligar: function (form, c, valores) {
+        const caixa = form.querySelector('[data-campo-imagens="' + c.nome + '"]');
+        const max = c.max || 12;
+        caixa.lista = (lerCaminho(valores, c.nome) || []).map(function (id) { return { manter: id }; });
+        caixa.desenhar = function () {
+          const mini = caixa.querySelector('.miniaturas');
+          mini.innerHTML = caixa.lista.map(function (item, i) {
+            return '<div class="miniatura">' + htmlPrevia(item) +
+              '<button type="button" class="miniatura-remover" data-acao="remover-miniatura" data-indice="' + i +
+              '" aria-label="Remover foto ' + (i + 1) + '">' + icone('fechar') + '</button></div>';
+          }).join('');
+          aplicarPrevias(mini, caixa.lista);
+        };
+        caixa.desenhar();
+        caixa.querySelector('input[type="file"]').addEventListener('change', async function (ev) {
+          const arquivos = Array.from(ev.target.files);
+          ev.target.value = '';
+          const vagas = max - caixa.lista.length;
+          if (arquivos.length > vagas) toast(c.mensagemMax || 'Máximo de ' + max + ' fotos.', 'erro');
+          const status = caixa.querySelector('.status-imagem');
+          for (const arquivo of arquivos.slice(0, Math.max(vagas, 0))) {
+            status.textContent = 'Comprimindo…';
+            try {
+              caixa.lista.push({ novo: await comprimirImagem(arquivo) });
+              caixa.desenhar();
+            } catch (e) {
+              toast(mensagemErro(e), 'erro');
+            }
+          }
+          status.textContent = '';
+        });
+      },
+      valor: function (form, c) {
+        return form.querySelector('[data-campo-imagens="' + c.nome + '"]').lista.slice();
+      }
+    }
+  };
 
   function coletarValores(form, campos) {
     const valores = {};
@@ -1694,6 +1852,257 @@
     toast('Você saiu do Modo Morador.');
   }
 
+  /* ---- Cadastros (criar, editar, excluir e reordenar) ---- */
+  const ANO_ATUAL = new Date().getFullYear();
+  const FORMULARIOS = {
+    slides: {
+      novo: 'Novo slide', editar: 'Editar slide', botao: '+ Adicionar slide', rotulo: function (s) { return s.titulo; },
+      campos: [
+        { nome: 'imagem', rotulo: 'Foto do slide', tipo: 'imagem', ajuda: 'Sem foto, o slide usa o fundo vermelho da marca com o texto de destaque.' },
+        { nome: 'tag', rotulo: 'Tag (ex.: VAGAS, TRADIÇÃO)', tipo: 'texto' },
+        { nome: 'titulo', rotulo: 'Título', tipo: 'texto', obrigatorio: true },
+        { nome: 'descricao', rotulo: 'Descrição breve', tipo: 'textarea' },
+        { nome: 'destaque', rotulo: 'Destaque (texto grande quando não há foto)', tipo: 'texto', placeholder: 'Ex.: 2 MIN' },
+        { nome: 'botaoTexto', rotulo: 'Texto do botão', tipo: 'texto', placeholder: 'Ex.: Quero uma vaga' },
+        { nome: 'botaoLink', rotulo: 'Link do botão', tipo: 'texto', placeholder: '#localizacao ou https://…',
+          validar: function (v) { return v && linkSeguro(v) === null ? 'Link inválido' : ''; } },
+        { nome: 'somenteComVagas', rotulo: 'Mostrar só quando houver vagas', tipo: 'checkbox' }
+      ],
+      preparar: function (v) { v.botaoLink = linkSeguro(v.botaoLink) || ''; return v; }
+    },
+    diferenciais: {
+      novo: 'Novo diferencial', editar: 'Editar diferencial', botao: '+ Adicionar diferencial', rotulo: function (d) { return d.titulo; },
+      campos: [
+        { nome: 'icone', rotulo: 'Ícone', tipo: 'icone' },
+        { nome: 'titulo', rotulo: 'Título', tipo: 'texto', obrigatorio: true },
+        { nome: 'texto', rotulo: 'Descrição', tipo: 'textarea' }
+      ],
+      padrao: { icone: 'estrela' }
+    },
+    galeria: {
+      novo: 'Nova foto', editar: 'Editar foto', rotulo: function (g) { return g.legenda || 'esta foto'; },
+      campos: [
+        { nome: 'imagem', rotulo: 'Foto', tipo: 'imagem', obrigatorio: true },
+        { nome: 'legenda', rotulo: 'Legenda (opcional)', tipo: 'texto', placeholder: 'Ex.: Sala de sinuca' }
+      ]
+    },
+    mascotes: {
+      novo: 'Novo mascote', editar: 'Editar mascote', botao: '+ Adicionar mascote', rotulo: function (m) { return m.nome; },
+      campos: [
+        { nome: 'nome', rotulo: 'Nome', tipo: 'texto', obrigatorio: true },
+        { nome: 'descricao', rotulo: 'Descrição', tipo: 'textarea' },
+        { nome: 'foto', rotulo: 'Foto', tipo: 'imagem' }
+      ]
+    },
+    moradores: {
+      novo: 'Novo morador', editar: 'Editar morador', botao: '+ Cadastrar Morador', rotulo: function (m) { return m.apelido; },
+      campos: [
+        { nome: 'apelido', rotulo: 'Apelido', tipo: 'texto', obrigatorio: true },
+        { nome: 'nome', rotulo: 'Nome completo', tipo: 'texto' },
+        { nome: 'categoria', rotulo: 'Categoria', tipo: 'select', obrigatorio: true,
+          opcoes: [['morador', 'Morador'], ['agregado', 'Agregado'], ['ex', 'Ex-Morador']] },
+        { nome: 'curso', rotulo: 'Curso', tipo: 'texto' },
+        { nome: 'anoEntrada', rotulo: 'Ano de entrada', tipo: 'numero', passo: '1',
+          validar: function (v) { return v !== null && (!Number.isInteger(v) || v < 1950 || v > ANO_ATUAL + 1) ? 'Ano inválido' : ''; } },
+        { nome: 'time', rotulo: 'Time que torce', tipo: 'texto' },
+        { nome: 'instagram', rotulo: 'Instagram', tipo: 'texto', placeholder: '@usuario' },
+        { nome: 'foto', rotulo: 'Foto', tipo: 'imagem' }
+      ],
+      padrao: { categoria: 'morador' },
+      preparar: function (v) { v.instagram = normalizarInstagram(v.instagram); return v; }
+    },
+    eventos: {
+      novo: 'Novo rolê', editar: 'Editar rolê', botao: '+ Cadastrar Novo Rolê', rotulo: function (e) { return e.titulo; },
+      campos: [
+        { nome: 'titulo', rotulo: 'Nome do rolê', tipo: 'texto', obrigatorio: true },
+        { nome: 'descricao', rotulo: 'Como ele é', tipo: 'textarea', linhas: 4 },
+        { nome: 'fotos', rotulo: 'Fotos', tipo: 'imagens', max: 12, mensagemMax: 'Máximo de 12 fotos por rolê.' }
+      ]
+    },
+    contatos: {
+      novo: 'Novo contato', editar: 'Editar contato', botao: '+ Adicionar contato', rotulo: function (c) { return c.apelido || c.nome; },
+      campos: [
+        { nome: 'nome', rotulo: 'Nome', tipo: 'texto', obrigatorio: true },
+        { nome: 'apelido', rotulo: 'Apelido', tipo: 'texto' },
+        { nome: 'telefone', rotulo: 'WhatsApp (com DDD)', tipo: 'telefone', obrigatorio: true, placeholder: '(35) 99999-9999',
+          validar: function (v) { return waLink(v) ? '' : 'Telefone inválido: informe DDD + número.'; } }
+      ],
+      preparar: function (v) { v.telefone = formatarTelefone(v.telefone); return v; }
+    },
+    faq: {
+      novo: 'Nova pergunta', editar: 'Editar pergunta', botao: '+ Adicionar pergunta', rotulo: function (f) { return f.pergunta; },
+      campos: [
+        { nome: 'pergunta', rotulo: 'Pergunta', tipo: 'texto', obrigatorio: true },
+        { nome: 'resposta', rotulo: 'Resposta', tipo: 'textarea', linhas: 5, obrigatorio: true }
+      ]
+    }
+  };
+  const HORIZONTAIS = { slides: 1, diferenciais: 1, galeria: 1, mascotes: 1, eventos: 1 };
+
+  function controlesItem(colecao, id, ordenavel) {
+    if (!estado.admin) return '';
+    const horizontal = HORIZONTAIS[colecao];
+    function botao(acao, nome, rotulo, extra) {
+      return '<button type="button" class="ctrl" data-acao="' + acao + '" data-colecao="' + colecao + '" data-id="' + escapeHtml(id) + '"' +
+        (extra || '') + ' aria-label="' + rotulo + '" title="' + rotulo + '">' + icone(nome) + '</button>';
+    }
+    return '<div class="controles-item">' +
+      (ordenavel ? botao('mover', horizontal ? 'seta-esq' : 'seta-cima', 'Mover para antes', ' data-direcao="-1"') +
+        botao('mover', horizontal ? 'seta-dir' : 'seta-baixo', 'Mover para depois', ' data-direcao="1"') : '') +
+      botao('editar', 'editar', 'Editar') + botao('excluir', 'lixeira', 'Excluir') +
+    '</div>';
+  }
+
+  function renderAcoesSecoes() {
+    document.querySelectorAll('.acoes-secao[data-secao]').forEach(function (el) {
+      const secao = el.dataset.secao;
+      if (!estado.admin) { el.innerHTML = ''; return; }
+      el.innerHTML = secao === 'galeria'
+        ? '<label class="btn btn-primario btn-pequeno" for="input-galeria">+ Adicionar fotos</label>' +
+          '<input type="file" id="input-galeria" accept="image/*" multiple class="sr-only">'
+        : '<button type="button" class="btn btn-primario btn-pequeno" data-acao="novo" data-colecao="' + secao + '">' +
+          FORMULARIOS[secao].botao + '</button>';
+    });
+  }
+
+  function abrirFormularioColecao(colecao, id) {
+    const def = FORMULARIOS[colecao];
+    const item = id ? estado.conteudo[colecao][id] : null;
+    if (id && !item) return;
+    abrirFormulario({
+      titulo: item ? def.editar : def.novo,
+      valores: item ? clonar(item) : clonar(def.padrao || {}),
+      campos: def.campos,
+      aoSalvar: function (valores) { return salvarDoFormulario(colecao, id, valores); }
+    });
+  }
+
+  function esquecerImagem(id) {
+    imagensProntas.delete(id);
+  }
+
+  async function apagarImagens(ids) {
+    for (const id of ids) {
+      try { await store.excluirImagem(id); } catch (e) { console.warn('Não foi possível apagar a imagem', id, e); }
+      esquecerImagem(id);
+    }
+  }
+
+  // Grava as fotos novas, depois o item; só então apaga as fotos trocadas ou removidas.
+  async function salvarDoFormulario(colecao, id, valores) {
+    const def = FORMULARIOS[colecao];
+    const mapa = estado.conteudo[colecao];
+    const anterior = id ? mapa[id] : null;
+    const dados = Object.assign({}, anterior || {}, def.preparar ? def.preparar(valores) : valores);
+    const criadas = [];
+    const descartadas = [];
+    try {
+      for (const c of def.campos) {
+        if (c.tipo === 'imagem') {
+          const v = valores[c.nome];
+          if (v && v.novo) { dados[c.nome] = await store.salvarImagem(v.novo); criadas.push(dados[c.nome]); }
+          else dados[c.nome] = v && v.manter ? v.manter : null;
+          if (anterior && anterior[c.nome] && anterior[c.nome] !== dados[c.nome]) descartadas.push(anterior[c.nome]);
+        } else if (c.tipo === 'imagens') {
+          const ids = [];
+          for (const item of valores[c.nome] || []) {
+            if (item.novo) { const novoId = await store.salvarImagem(item.novo); criadas.push(novoId); ids.push(novoId); }
+            else if (item.manter) ids.push(item.manter);
+          }
+          dados[c.nome] = ids;
+          ((anterior && anterior[c.nome]) || []).forEach(function (antigo) { if (ids.indexOf(antigo) < 0) descartadas.push(antigo); });
+        }
+      }
+      if (!anterior && colecao !== 'moradores') dados.ordem = proximaOrdem(mapa);
+      await store.salvarItem(colecao, id || gerarId(), dados);
+    } catch (erro) {
+      await apagarImagens(criadas);
+      throw erro;
+    }
+    await apagarImagens(descartadas);
+  }
+
+  function confirmar(mensagem, opcoes) {
+    const el = document.getElementById('modal-confirmar');
+    const textoSim = (opcoes && opcoes.textoSim) || 'Excluir';
+    return new Promise(function (resolver) {
+      el.innerHTML = cabecalhoModal('titulo-confirmar', (opcoes && opcoes.titulo) || 'Tem certeza?') +
+        '<div class="modal-corpo"><p class="mensagem">' + escapeHtml(mensagem) + '</p>' +
+          '<div class="form-acoes">' +
+            '<button type="button" class="btn btn-secundario" data-acao="confirmar-nao">Cancelar</button>' +
+            '<button type="button" class="btn btn-primario" data-acao="confirmar-sim">' + escapeHtml(textoSim) + '</button>' +
+          '</div>' +
+        '</div></div>';
+      el.resolver = resolver;
+      el.aoFechar = function () {
+        if (!el.resolver) return;
+        const r = el.resolver;
+        el.resolver = null;
+        r(false);
+      };
+      abrirModal(el, document.activeElement);
+      el.querySelector('[data-acao="confirmar-nao"]').focus();
+    });
+  }
+
+  function responderConfirmacao(sim) {
+    const el = document.getElementById('modal-confirmar');
+    const r = el.resolver;
+    el.resolver = null;
+    fecharModal(el);
+    if (r) r(sim);
+  }
+
+  async function excluirDaColecao(colecao, id) {
+    const item = estado.conteudo[colecao][id];
+    if (!item) return;
+    const nome = FORMULARIOS[colecao].rotulo(item) || 'este item';
+    if (!(await confirmar('Excluir "' + nome + '"? Essa ação não pode ser desfeita.'))) return;
+    try {
+      await store.excluirItem(colecao, id);
+      const fotos = {};
+      fotos[colecao] = {};
+      fotos[colecao][id] = item;
+      await apagarImagens(coletarIdsImagens(fotos));
+      toast('Excluído.');
+    } catch (e) {
+      toast(mensagemErro(e), 'erro');
+    }
+  }
+
+  async function moverNaColecao(colecao, id, direcao) {
+    const lista = listar(estado.conteudo, colecao);
+    const i = lista.findIndex(function (x) { return x.id === id; });
+    const j = i + direcao;
+    if (i < 0 || j < 0 || j >= lista.length) return;
+    const pares = lista.map(function (x, k) { return [x.id, k + 1]; });
+    pares[i][1] = j + 1;
+    pares[j][1] = i + 1;
+    if (colecao === 'slides') carrossel.indice = j;
+    try { await store.reordenar(colecao, pares); } catch (e) { toast(mensagemErro(e), 'erro'); }
+  }
+
+  async function adicionarFotosGaleria(arquivos) {
+    let adicionadas = 0;
+    let ordem = proximaOrdem(estado.conteudo.galeria);
+    for (const arquivo of arquivos) {
+      try {
+        const id = await store.salvarImagem(await comprimirImagem(arquivo));
+        try {
+          await store.salvarItem('galeria', gerarId(), { imagem: id, legenda: '', ordem: ordem++ });
+        } catch (e) {
+          await apagarImagens([id]);
+          throw e;
+        }
+        adicionadas++;
+      } catch (e) {
+        toast(mensagemErro(e), 'erro');
+        if (e && e.codigo !== 'formato-imagem') break;
+      }
+    }
+    if (adicionadas) toast(adicionadas === 1 ? '1 foto adicionada' : adicionadas + ' fotos adicionadas');
+  }
+
   /* ======================================================================
      10. INICIALIZAÇÃO
      ====================================================================== */
@@ -1740,6 +2149,22 @@
     'abrir-config': function () { abrirConfiguracoes(); },
     'editar-config': function (alvo) { abrirConfiguracoes(alvo.dataset.grupo); },
     'trocar-senha': abrirTrocarSenha,
+    novo: function (alvo) { abrirFormularioColecao(alvo.dataset.colecao, null); },
+    editar: function (alvo) { abrirFormularioColecao(alvo.dataset.colecao, alvo.dataset.id); },
+    excluir: function (alvo) { excluirDaColecao(alvo.dataset.colecao, alvo.dataset.id); },
+    mover: function (alvo) { moverNaColecao(alvo.dataset.colecao, alvo.dataset.id, Number(alvo.dataset.direcao) || 1); },
+    'confirmar-sim': function () { responderConfirmacao(true); },
+    'confirmar-nao': function () { responderConfirmacao(false); },
+    'remover-imagem': function (alvo) {
+      const caixa = alvo.closest('[data-campo-imagem]');
+      caixa.valorAtual = null;
+      caixa.desenhar();
+    },
+    'remover-miniatura': function (alvo) {
+      const caixa = alvo.closest('[data-campo-imagens]');
+      caixa.lista.splice(Number(alvo.dataset.indice), 1);
+      caixa.desenhar();
+    },
     'lightbox-fechar': fecharLightbox,
     'lightbox-anterior': function () { navegarLightbox(-1); },
     'lightbox-proximo': function () { navegarLightbox(1); }
@@ -1750,7 +2175,8 @@
     if (!alvo) return;
     const acao = ACOES[alvo.dataset.acao];
     if (!acao) return;
-    if (alvo.tagName === 'A' && alvo.getAttribute('href') === '#') ev.preventDefault();
+    // Botões dentro do <summary> (FAQ) não devem abrir/fechar o acordeão.
+    if ((alvo.tagName === 'A' && alvo.getAttribute('href') === '#') || alvo.closest('summary')) ev.preventDefault();
     acao(alvo, ev);
   });
 
@@ -1765,7 +2191,7 @@
       normalizarInstagram: normalizarInstagram, linkSeguro: linkSeguro, sha256Hex: sha256Hex, iniciais: iniciais,
       juntarNomes: juntarNomes, chaveTime: chaveTime, coresTime: coresTime, mensagemErro: mensagemErro,
       normalizar: normalizar, listar: listar, ordenarMoradores: ordenarMoradores, proximaOrdem: proximaOrdem,
-      coletarIdsImagens: coletarIdsImagens, gerarTextoDivulgacao: gerarTextoDivulgacao,
+      coletarIdsImagens: coletarIdsImagens, gerarTextoDivulgacao: gerarTextoDivulgacao, comprimirImagem: comprimirImagem,
       COLECOES: COLECOES, CATEGORIAS: CATEGORIAS, ICONE_EMOJI: ICONE_EMOJI
     },
     get CONTEUDO_INICIAL() { return clonar(CONTEUDO_INICIAL); },
@@ -1794,6 +2220,7 @@
     ligarModais();
     document.addEventListener('change', function (ev) {
       if (ev.target.id === 'toggle-vagas') alternarVagas(ev.target.checked);
+      if (ev.target.id === 'input-galeria') adicionarFotosGaleria(Array.from(ev.target.files));
     });
     document.addEventListener('scroll', function (ev) {
       if (ev.target.classList && ev.target.classList.contains('evento-fotos')) atualizarPontosEvento(ev.target);

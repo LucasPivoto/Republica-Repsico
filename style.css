@@ -870,8 +870,47 @@ body.is-admin { --barra-h: 112px; }
 }
 .btn-editar-config:hover { background: var(--accent-hover); }
 .btn-editar-config .icone { width: 16px; height: 16px; }
-.sobre, .card-financeiro, .faixa-inner, .mascotes-cabecalho, .card-endereco { position: relative; }
+.sobre, .card-financeiro, .faixa-inner, .mascotes-cabecalho, .card-endereco, .card-evento { position: relative; }
 body.is-admin .sobre { padding-right: 44px; }
+
+.acoes-hero { justify-content: flex-end; margin-bottom: 12px; }
+.controles-item { position: absolute; top: 8px; right: 8px; z-index: 3; display: flex; gap: 4px; }
+.ctrl {
+  display: grid; place-items: center; width: 32px; height: 32px; padding: 0;
+  border: 0; border-radius: 50%; background: rgba(18, 18, 20, 0.78); color: var(--branco);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.ctrl:hover { background: var(--accent); }
+.ctrl .icone { width: 16px; height: 16px; }
+.hero-painel .controles-item, .faq-item .controles-item, .card-contato .controles-item { position: static; }
+.card-contato .controles-item { grid-column: 1 / -1; justify-content: flex-end; }
+.faq-item summary .controles-item { margin-left: auto; flex: none; }
+.card-morador .controles-item { top: 8px; right: 8px; }
+.galeria-item .controles-item { top: 6px; right: 6px; }
+body.is-admin .mascote { padding-top: 48px; }
+
+.campo-imagem, .campo-imagens { display: grid; gap: 8px; }
+.previa-imagem {
+  width: 100%; max-width: 280px; aspect-ratio: 4 / 3; border-radius: 12px; overflow: hidden;
+  border: 1px dashed var(--border); background: var(--bg-alt);
+}
+.previa-imagem img { width: 100%; height: 100%; object-fit: cover; }
+.previa-vazia { display: grid; place-items: center; align-content: center; gap: 4px; width: 100%; height: 100%; color: var(--text-muted); font-size: 0.85rem; }
+.campo-imagem-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
+.campo-imagem-acoes label { cursor: pointer; }
+.status-imagem { color: var(--text-muted); font-size: 0.85rem; }
+.status-imagem:empty { display: none; }
+.miniaturas { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; }
+.miniaturas:empty { display: none; }
+.miniatura { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: var(--bg-alt); }
+.miniatura img, .miniatura .previa-vazia { width: 100%; height: 100%; object-fit: cover; }
+.miniatura-remover {
+  position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 26px; height: 26px; padding: 0;
+  border: 0; border-radius: 50%; background: rgba(18, 18, 20, 0.8); color: var(--branco);
+}
+.miniatura-remover:hover { background: var(--accent); }
+.miniatura-remover .icone { width: 14px; height: 14px; }
+.mensagem { margin: 0; font-size: 1rem; overflow-wrap: anywhere; }
 
 @media (min-width: 640px) {
   .rotulo-longo { display: inline; }
