@@ -766,6 +766,125 @@ img[data-img]:not([src]) { background: linear-gradient(110deg, var(--bg-card) 30
   .rodape-conteudo { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
 
+/* ---------- 6b. Modais e formulários ---------- */
+.modal { position: fixed; inset: 0; z-index: 250; display: grid; place-items: center; padding: 16px; }
+.modal-fundo { position: absolute; inset: 0; background: rgba(8, 8, 10, 0.62); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+.modal-caixa {
+  position: relative; width: min(100%, 560px); max-height: calc(100dvh - 32px); overflow: auto; overscroll-behavior: contain;
+  border-radius: var(--raio); background: var(--bg-elevado); color: var(--text);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4); border: 1px solid var(--border);
+}
+#modal-login .modal-caixa, #modal-confirmar .modal-caixa { width: min(100%, 420px); }
+.modal-cabecalho {
+  position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 16px 16px 12px 22px; background: var(--bg-elevado); border-bottom: 1px solid var(--border);
+}
+.modal-cabecalho h2 { margin: 0; font-size: 1.2rem; font-weight: 900; }
+.modal-corpo { display: grid; gap: 16px; padding: 20px 22px 22px; }
+.modal-intro { margin: 0; color: var(--text-muted); }
+.btn-bloco { width: 100%; }
+.btn .icone { width: 18px; height: 18px; }
+
+.campo { display: grid; gap: 6px; min-width: 0; }
+.campo-rotulo { font-weight: 600; font-size: 0.92rem; }
+.obrigatorio { color: var(--accent-text); }
+.campo input, .campo textarea, .campo select {
+  width: 100%; min-height: 44px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--text);
+}
+.campo textarea { resize: vertical; min-height: 88px; }
+.campo input:focus, .campo textarea:focus, .campo select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-suave); }
+.campo-ajuda { color: var(--text-muted); font-size: 0.82rem; }
+.erro-campo { color: var(--accent-text); font-size: 0.85rem; font-weight: 600; }
+.campo-senha { display: flex; gap: 8px; }
+.campo-senha input { flex: 1; min-width: 0; }
+.campo-icone { display: flex; gap: 10px; align-items: center; }
+.previa-icone { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 12px; background: var(--accent-suave); color: var(--accent-text); }
+.campo-check { display: flex; gap: 10px; align-items: center; font-weight: 600; }
+.campo-check input { width: 20px; height: 20px; accent-color: var(--accent); }
+.form-grupo {
+  margin: 8px 0 -4px; padding-top: 14px; border-top: 1px solid var(--border);
+  font-size: 0.8rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent-text);
+}
+.modal-corpo > .form-grupo:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.form-acoes {
+  position: sticky; bottom: -22px; display: flex; justify-content: flex-end; gap: 10px;
+  margin: 4px -22px -22px; padding: 14px 22px; background: var(--bg-elevado); border-top: 1px solid var(--border);
+}
+.erro { margin: 0; min-height: 1.2em; color: var(--accent-text); font-weight: 600; }
+.aviso-modo-local {
+  margin: 0; padding: 10px 12px; border-radius: 10px; font-size: 0.88rem;
+  background: rgba(234, 179, 8, 0.14); color: var(--text); border: 1px solid rgba(234, 179, 8, 0.4);
+}
+
+/* ---------- 6c. Modo Morador ---------- */
+body.is-admin { --barra-h: 112px; }
+.barra-morador {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 150;
+  background: #1C1C21; color: #F4F4F5; border-top: 3px solid var(--accent);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.25);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.barra-inner { display: grid; gap: 2px; padding: 6px 8px 4px; max-width: var(--max); margin-inline: auto; }
+.barra-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.barra-botoes { display: flex; justify-content: space-between; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.barra-botoes::-webkit-scrollbar { display: none; }
+.rotulo-longo { display: none; }
+.rotulo-curto { display: inline; }
+.indicador-modo {
+  flex: none; display: inline-block; padding: 5px 10px; border-radius: 999px;
+  background: #2C2C33; font-size: 0.75rem; font-weight: 700; white-space: nowrap;
+}
+.indicador-modo::before {
+  content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; vertical-align: 1px;
+  border-radius: 50%; background: #EAB308;
+}
+.indicador-modo.modo-firebase::before { background: #22C55E; }
+.barra-btn {
+  flex: 1 0 auto; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  min-width: 52px; height: 52px; padding: 4px 4px; border: 0; border-radius: 10px;
+  background: transparent; color: #E4E4E7; font-size: 0.68rem; font-weight: 600;
+}
+.barra-btn:hover { background: #2C2C33; color: var(--branco); }
+.barra-btn .icone { width: 20px; height: 20px; }
+.interruptor { flex: none; display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 10px; cursor: pointer; }
+.interruptor:hover { background: #2C2C33; }
+.interruptor input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.interruptor-trilho {
+  position: relative; width: 42px; height: 24px; border-radius: 999px; background: #52525B; transition: background-color var(--transicao);
+}
+.interruptor-trilho::after {
+  content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--branco); transition: transform var(--transicao);
+}
+.interruptor input:checked + .interruptor-trilho { background: #22C55E; }
+.interruptor input:checked + .interruptor-trilho::after { transform: translateX(18px); }
+.interruptor input:focus-visible + .interruptor-trilho { outline: 3px solid var(--accent-hover); outline-offset: 2px; }
+.interruptor-rotulo { font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
+
+.btn-editar-config {
+  position: absolute; top: 10px; right: 10px; z-index: 2;
+  display: grid; place-items: center; width: 36px; height: 36px; padding: 0;
+  border: 0; border-radius: 50%; background: var(--accent); color: var(--branco);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+.btn-editar-config:hover { background: var(--accent-hover); }
+.btn-editar-config .icone { width: 16px; height: 16px; }
+.sobre, .card-financeiro, .faixa-inner, .mascotes-cabecalho, .card-endereco { position: relative; }
+body.is-admin .sobre { padding-right: 44px; }
+
+@media (min-width: 640px) {
+  .rotulo-longo { display: inline; }
+  .rotulo-curto { display: none; }
+}
+@media (min-width: 900px) {
+  body.is-admin { --barra-h: 68px; }
+  .barra-inner { display: flex; align-items: center; gap: 8px; height: 65px; padding: 0 12px; }
+  .barra-status { flex: none; gap: 6px; }
+  .barra-botoes { flex: 1; justify-content: flex-end; gap: 4px; }
+  .barra-btn { flex: none; flex-direction: row; gap: 6px; min-width: 0; height: 44px; padding: 0 10px; font-size: 0.82rem; }
+}
+
 /* ---------- 7. Diversos ---------- */
 .aviso-noscript {
   margin: 0; padding: 16px; text-align: center;

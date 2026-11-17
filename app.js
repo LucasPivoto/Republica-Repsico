@@ -708,6 +708,7 @@
     renderLocalizacao();
     renderFaq();
     renderRodape();
+    atualizarBarraMorador();
     hidratarImagens(document);
   }
 
@@ -899,7 +900,7 @@
     const t = cfg.textos;
     const f = cfg.funcionaria;
 
-    document.querySelector('#casa .sobre').innerHTML =
+    document.querySelector('#casa .sobre').innerHTML = botaoEditarConfig('textos', 'textos do site') +
       '<h2 class="secao-titulo">' + escapeHtml(t.sobreTitulo) + '</h2>' +
       '<p class="secao-intro">' + escapeHtml(t.sobreTexto) + '</p>';
 
@@ -916,9 +917,10 @@
         '<h3>' + escapeHtml(f.nome) + '</h3>' +
         (f.descricao ? '<p>' + escapeHtml(f.descricao) + '</p>' : '') +
         (f.refeicoes ? '<p class="refeicoes">' + icone('talheres') + '<span>' + escapeHtml(f.refeicoes) + '</span></p>' : '') +
+        botaoEditarConfig('funcionaria', 'funcionária') +
       '</article>';
 
-    document.getElementById('card-financeiro').innerHTML =
+    document.getElementById('card-financeiro').innerHTML = botaoEditarConfig('valores', 'valores') +
       '<div class="financeiro-valor">' +
         '<span class="financeiro-rotulo">Transparência financeira</span>' +
         '<strong class="valor">' + escapeHtml(formatarMoeda(cfg.valorMensal)) + '</strong>' +
@@ -955,6 +957,7 @@
           '<span class="mascotes-selo">' + icone('pata') + 'Mascotes oficiais</span>' +
           '<h3>' + escapeHtml(t.mascotesTitulo) + '</h3>' +
           '<p class="mascotes-subtitulo">' + escapeHtml(t.mascotesSubtitulo) + '</p>' +
+          botaoEditarConfig('textos', 'textos dos mascotes') +
           '<div class="acoes-secao" data-secao="mascotes"></div>' +
         '</div>' +
         '<div class="mascotes-lista">' + lista.map(function (m) {
@@ -1076,7 +1079,7 @@
     const e = estado.conteudo.config.endereco;
     const endereco = enderecoCompleto();
     const q = encodeURIComponent(endereco);
-    document.querySelector('#localizacao .card-endereco').innerHTML =
+    document.querySelector('#localizacao .card-endereco').innerHTML = botaoEditarConfig('endereco', 'endereço') +
       '<span class="icone-bolha">' + icone('pin') + '</span>' +
       '<div class="endereco-texto">' +
         '<p class="endereco">' + escapeHtml(endereco) + '</p>' +
@@ -1163,7 +1166,7 @@
       (cfg.vagasAbertas ? '<span class="pulso" aria-hidden="true"></span>' : '') +
       '<div class="faixa-texto"><strong>' + escapeHtml(cfg.vagasAbertas ? t.vagasAbertasTitulo : t.casaCompletaTitulo) +
       '</strong><span>' + escapeHtml(cfg.vagasAbertas ? t.vagasAbertasTexto : t.casaCompletaTexto) + '</span></div>' +
-      acao + '</div>';
+      acao + botaoEditarConfig('textos', 'textos da faixa') + '</div>';
   }
 
   /* ======================================================================
@@ -1319,6 +1322,194 @@
     else if (!ev.shiftKey && document.activeElement === ultimo) { ev.preventDefault(); primeiro.focus(); }
   }
 
+  /* ---- Modais (foco preso, Esc, devolução de foco) ---- */
+  const modaisAbertos = [];
+
+  function cabecalhoModal(id, titulo) {
+    return '<div class="modal-fundo" data-acao="fechar-modal"></div>' +
+      '<div class="modal-caixa" role="dialog" aria-modal="true" aria-labelledby="' + id + '">' +
+        '<div class="modal-cabecalho"><h2 id="' + id + '">' + escapeHtml(titulo) + '</h2>' +
+        '<button type="button" class="btn-icone" data-acao="fechar-modal" aria-label="Fechar">' + icone('fechar') + '</button></div>';
+  }
+
+  function abrirModal(el, origem) {
+    el.hidden = false;
+    el.origemFoco = origem || document.activeElement;
+    if (modaisAbertos.indexOf(el) < 0) modaisAbertos.push(el);
+    document.documentElement.classList.add('sem-rolagem');
+  }
+
+  function fecharModal(el) {
+    if (!el || el.hidden) return;
+    el.hidden = true;
+    const i = modaisAbertos.indexOf(el);
+    if (i >= 0) modaisAbertos.splice(i, 1);
+    const aoFechar = el.aoFechar;
+    el.aoFechar = null;
+    el.innerHTML = '';
+    if (!modaisAbertos.length && document.getElementById('lightbox').hidden) {
+      document.documentElement.classList.remove('sem-rolagem');
+    }
+    const origem = el.origemFoco;
+    el.origemFoco = null;
+    if (origem && document.contains(origem)) origem.focus();
+    if (aoFechar) aoFechar();
+  }
+
+  function ligarModais() {
+    document.addEventListener('keydown', function (ev) {
+      const topo = modaisAbertos[modaisAbertos.length - 1];
+      if (!topo) return;
+      if (ev.key === 'Escape') { ev.preventDefault(); fecharModal(topo); }
+      else if (ev.key === 'Tab') prenderFoco(topo, ev);
+    });
+  }
+
+  /* ---- Formulário genérico (configurações, senha e cadastros) ---- */
+  function lerCaminho(obj, caminho) {
+    return caminho.split('.').reduce(function (o, k) { return o === null || o === undefined ? undefined : o[k]; }, obj);
+  }
+
+  function gravarCaminho(obj, caminho, valor) {
+    const partes = caminho.split('.');
+    let alvo = obj;
+    partes.slice(0, -1).forEach(function (k) { alvo = alvo[k] = ehObjeto(alvo[k]) ? alvo[k] : {}; });
+    alvo[partes[partes.length - 1]] = valor;
+  }
+
+  const NOMES_ICONES = {
+    pin: 'Localização', casa: 'Casa', game: 'Videogame', wifi: 'Wi-Fi', chef: 'Chef', talheres: 'Talheres', pessoas: 'Pessoas',
+    pata: 'Pata', chama: 'Churrasco', tv: 'TV', cama: 'Cama', chuveiro: 'Chuveiro', escudo: 'Segurança', estrela: 'Estrela',
+    coracao: 'Coração', musica: 'Música'
+  };
+
+  function htmlCampo(c, valores) {
+    if (c.tipo === 'grupo') return '<h3 class="form-grupo" id="grupo-' + c.nome + '">' + escapeHtml(c.rotulo) + '</h3>';
+    const valor = lerCaminho(valores, c.nome);
+    const v = valor === null || valor === undefined ? '' : valor;
+    const nome = escapeHtml(c.nome);
+    const obrig = c.obrigatorio ? ' <span class="obrigatorio" aria-hidden="true">*</span>' : '';
+    const ajuda = c.ajuda ? '<span class="campo-ajuda">' + escapeHtml(c.ajuda) + '</span>' : '';
+    const erro = '<span class="erro-campo" data-erro="' + nome + '" hidden></span>';
+    if (c.tipo === 'checkbox') {
+      return '<label class="campo-check"><input type="checkbox" name="' + nome + '"' + (v ? ' checked' : '') + '><span>' +
+        escapeHtml(c.rotulo) + '</span></label>';
+    }
+    if (CAMPOS_ESPECIAIS[c.tipo]) return CAMPOS_ESPECIAIS[c.tipo].html(c, valores);
+    let controle;
+    if (c.tipo === 'textarea') {
+      controle = '<textarea name="' + nome + '" rows="' + (c.linhas || 3) + '">' + escapeHtml(v) + '</textarea>';
+    } else if (c.tipo === 'select' || c.tipo === 'icone') {
+      const opcoes = c.tipo === 'icone' ? Object.keys(NOMES_ICONES).map(function (k) { return [k, NOMES_ICONES[k]]; }) : c.opcoes;
+      controle = '<select name="' + nome + '">' + opcoes.map(function (o) {
+        return '<option value="' + escapeHtml(o[0]) + '"' + (String(o[0]) === String(v) ? ' selected' : '') + '>' + escapeHtml(o[1]) + '</option>';
+      }).join('') + '</select>';
+      if (c.tipo === 'icone') controle = '<span class="campo-icone"><span class="previa-icone">' + icone(v || 'estrela') + '</span>' + controle + '</span>';
+    } else {
+      const tipos = { numero: 'number', telefone: 'tel', senha: 'password' };
+      controle = '<input name="' + nome + '" type="' + (tipos[c.tipo] || 'text') + '" value="' + escapeHtml(v) + '"' +
+        (c.tipo === 'numero' ? ' inputmode="decimal" step="' + (c.passo || 'any') + '"' : '') +
+        (c.tipo === 'senha' ? ' autocomplete="new-password"' : '') +
+        (c.tipo === 'telefone' ? ' autocomplete="tel" data-formatar-telefone' : '') +
+        (c.placeholder ? ' placeholder="' + escapeHtml(c.placeholder) + '"' : '') + '>';
+    }
+    return '<label class="campo"><span class="campo-rotulo">' + escapeHtml(c.rotulo) + obrig + '</span>' + controle + ajuda + erro + '</label>';
+  }
+
+  // Campos com comportamento próprio (fotos) entram aqui na etapa de cadastros.
+  const CAMPOS_ESPECIAIS = {};
+
+  function coletarValores(form, campos) {
+    const valores = {};
+    campos.forEach(function (c) {
+      if (c.tipo === 'grupo') return;
+      let valor;
+      if (CAMPOS_ESPECIAIS[c.tipo]) valor = CAMPOS_ESPECIAIS[c.tipo].valor(form, c);
+      else {
+        const el = form.elements.namedItem(c.nome);
+        if (!el) return;
+        if (c.tipo === 'checkbox') valor = el.checked;
+        else if (c.tipo === 'numero') valor = el.value.trim() === '' ? null : Number(el.value.replace(',', '.'));
+        else valor = el.value.trim();
+      }
+      gravarCaminho(valores, c.nome, valor);
+    });
+    return valores;
+  }
+
+  function marcarErro(form, nome, mensagem) {
+    const alvo = form.querySelector('[data-erro="' + nome + '"]');
+    if (!alvo) return;
+    alvo.textContent = mensagem;
+    alvo.hidden = false;
+  }
+
+  function abrirFormulario(opcoes) {
+    const el = document.getElementById('modal-form');
+    const campos = opcoes.campos;
+    const origem = document.activeElement;
+    el.innerHTML = cabecalhoModal('titulo-form', opcoes.titulo) +
+      '<form class="modal-corpo" novalidate>' +
+        campos.map(function (c) { return htmlCampo(c, opcoes.valores || {}); }).join('') +
+        '<div class="form-acoes">' +
+          '<button type="button" class="btn btn-secundario" data-acao="fechar-modal">Cancelar</button>' +
+          '<button type="submit" class="btn btn-primario">' + escapeHtml(opcoes.textoSalvar || 'Salvar') + '</button>' +
+        '</div>' +
+      '</form></div>';
+    const form = el.querySelector('form');
+    campos.forEach(function (c) { if (CAMPOS_ESPECIAIS[c.tipo]) CAMPOS_ESPECIAIS[c.tipo].ligar(form, c, opcoes.valores || {}); });
+    form.addEventListener('change', function (ev) {
+      if (ev.target.matches('select') && ev.target.closest('.campo-icone')) {
+        ev.target.closest('.campo-icone').querySelector('.previa-icone').innerHTML = icone(ev.target.value);
+      }
+    });
+    form.addEventListener('focusout', function (ev) {
+      if (ev.target.hasAttribute && ev.target.hasAttribute('data-formatar-telefone')) ev.target.value = formatarTelefone(ev.target.value);
+    });
+    form.addEventListener('submit', async function (ev) {
+      ev.preventDefault();
+      form.querySelectorAll('.erro-campo').forEach(function (e) { e.hidden = true; e.textContent = ''; });
+      const valores = coletarValores(form, campos);
+      let primeiroErro = null;
+      campos.forEach(function (c) {
+        if (c.tipo === 'grupo') return;
+        const valor = lerCaminho(valores, c.nome);
+        let mensagem = '';
+        if (c.obrigatorio && (valor === null || valor === undefined || valor === '' || (Array.isArray(valor) && !valor.length))) mensagem = 'Obrigatório';
+        else if (c.validar) mensagem = c.validar(valor, valores) || '';
+        if (mensagem) {
+          marcarErro(form, c.nome, mensagem);
+          primeiroErro = primeiroErro || c.nome;
+        }
+      });
+      if (primeiroErro) {
+        const campo = form.elements.namedItem(primeiroErro) || form.querySelector('[data-campo="' + primeiroErro + '"]');
+        if (campo && campo.focus) campo.focus();
+        return;
+      }
+      const botao = form.querySelector('button[type="submit"]');
+      botao.disabled = true;
+      try {
+        await opcoes.aoSalvar(valores);
+        fecharModal(el);
+        toast(opcoes.mensagemSucesso || 'Salvo!');
+      } catch (erro) {
+        console.error(erro);
+        if (erro && erro.campo) marcarErro(form, erro.campo, erro.message);
+        else toast(mensagemErro(erro), 'erro');
+      } finally {
+        botao.disabled = false;
+      }
+    });
+    abrirModal(el, origem);
+    const foco = opcoes.focar ? form.querySelector(opcoes.focar) : form.querySelector('input:not([type="hidden"]):not([type="file"]), select, textarea');
+    if (foco) {
+      foco.focus();
+      if (opcoes.focar) foco.scrollIntoView({ block: 'center' });
+    }
+    return form;
+  }
+
   function definirMenu(aberto) {
     const navbar = document.querySelector('.navbar');
     const botao = document.querySelector('[data-acao="menu"]');
@@ -1330,6 +1521,177 @@
 
   function alternarMenu() {
     definirMenu(!document.querySelector('.navbar').classList.contains('menu-aberto'));
+  }
+
+  /* ======================================================================
+     9. MODO MORADOR
+     ====================================================================== */
+
+  function botaoEditarConfig(grupo, rotulo) {
+    if (!estado.admin) return '';
+    return '<button type="button" class="btn-editar-config" data-acao="editar-config" data-grupo="' + grupo +
+      '" aria-label="Editar ' + escapeHtml(rotulo) + '" title="Editar ' + escapeHtml(rotulo) + '">' + icone('editar') + '</button>';
+  }
+
+  function abrirLogin(origem) {
+    const el = document.getElementById('modal-login');
+    el.innerHTML = cabecalhoModal('titulo-login', 'Área do Morador') +
+      '<form class="modal-corpo" novalidate>' +
+        '<p class="modal-intro">Digite a senha da casa para editar o site.</p>' +
+        '<label class="campo"><span class="campo-rotulo">Senha</span>' +
+          '<span class="campo-senha"><input id="senha-login" name="senha" type="password" autocomplete="current-password" required>' +
+          '<button type="button" class="btn-icone" data-acao="mostrar-senha" aria-label="Mostrar senha" aria-pressed="false">' + icone('olho') + '</button></span>' +
+        '</label>' +
+        '<p class="erro" role="alert"></p>' +
+        (store && store.modo === 'local' ? '<p class="aviso-modo-local">Modo local: as alterações ficam salvas só neste navegador.</p>' : '') +
+        '<button type="submit" class="btn btn-primario btn-bloco">' + icone('cadeado-aberto') + 'Entrar</button>' +
+      '</form></div>';
+    const form = el.querySelector('form');
+    const campo = form.querySelector('#senha-login');
+    const erro = form.querySelector('.erro');
+    form.addEventListener('submit', async function (ev) {
+      ev.preventDefault();
+      const botao = form.querySelector('button[type="submit"]');
+      botao.disabled = true;
+      erro.textContent = '';
+      try {
+        await store.auth.entrar(campo.value);
+        fecharModal(el);
+      } catch (e) {
+        erro.textContent = mensagemErro(e);
+        campo.select();
+      } finally {
+        botao.disabled = false;
+      }
+    });
+    abrirModal(el, origem);
+    campo.focus();
+  }
+
+  function atualizarModoAdmin(logado) {
+    const mudou = estado.admin !== !!logado;
+    estado.admin = !!logado;
+    document.body.classList.toggle('is-admin', estado.admin);
+    const btn = document.querySelector('.navbar .btn-morador');
+    btn.dataset.acao = estado.admin ? 'sair' : 'abrir-login';
+    btn.setAttribute('aria-label', estado.admin ? 'Sair do Modo Morador' : 'Área do Morador');
+    btn.innerHTML = '<span class="btn-morador-icone">' + icone(estado.admin ? 'cadeado-aberto' : 'cadeado') +
+      '</span><span class="rotulo">' + (estado.admin ? 'Sair' : 'Área do Morador') + '</span>';
+    renderBarraMorador();
+    if (mudou) renderizarTudo();
+  }
+
+  function renderBarraMorador() {
+    const barra = document.getElementById('barra-morador');
+    barra.hidden = !estado.admin;
+    if (!estado.admin) { barra.innerHTML = ''; return; }
+    const modo = store ? store.modo : 'local';
+    function botao(acao, nome, rotulo, curto) {
+      return '<button type="button" class="barra-btn" data-acao="' + acao + '">' + icone(nome) +
+        (curto ? '<span class="rotulo-longo">' + rotulo + '</span><span class="rotulo-curto">' + curto + '</span>' : '<span>' + rotulo + '</span>') +
+        '</button>';
+    }
+    barra.innerHTML = '<div class="barra-inner" role="toolbar" aria-label="Ferramentas do Modo Morador">' +
+      '<div class="barra-status">' +
+        '<span class="indicador-modo modo-' + modo + '">' +
+          (modo === 'firebase' ? 'Firebase' : 'Local<span class="rotulo-longo"> (só neste navegador)</span>') + '</span>' +
+        '<label class="interruptor" for="toggle-vagas"><input type="checkbox" id="toggle-vagas">' +
+          '<span class="interruptor-trilho" aria-hidden="true"></span><span class="interruptor-rotulo"></span></label>' +
+      '</div>' +
+      '<div class="barra-botoes">' +
+        botao('abrir-config', 'engrenagem', 'Configurações', 'Ajustes') +
+        botao('copiar-divulgacao', 'whatsapp', 'Divulgação', 'Divulgar') +
+        botao('exportar-backup', 'download', 'Exportar') +
+        botao('importar-backup', 'upload', 'Importar') +
+        '<input type="file" id="arquivo-backup" accept=".json,application/json" hidden>' +
+        botao('trocar-senha', 'chave', 'Senha') +
+        botao('sair', 'sair', 'Sair') +
+      '</div>' +
+    '</div>';
+    atualizarBarraMorador();
+  }
+
+  function atualizarBarraMorador() {
+    const toggle = document.getElementById('toggle-vagas');
+    if (!toggle) return;
+    const abertas = estado.conteudo.config.vagasAbertas;
+    toggle.checked = abertas;
+    toggle.closest('.interruptor').querySelector('.interruptor-rotulo').textContent = abertas ? 'Vagas abertas' : 'Casa completa';
+  }
+
+  async function alternarVagas(abertas) {
+    try {
+      await store.salvarConfig({ vagasAbertas: abertas });
+      toast(abertas ? 'Vagas abertas no site!' : 'Casa completa no site!');
+    } catch (e) {
+      toast(mensagemErro(e), 'erro');
+      atualizarBarraMorador();
+    }
+  }
+
+  function abrirConfiguracoes(grupo) {
+    const cfg = estado.conteudo.config;
+    const valores = clonar(cfg);
+    valores.itensInclusos = cfg.itensInclusos.join('\n');
+    abrirFormulario({
+      titulo: 'Configurações gerais',
+      valores: valores,
+      focar: grupo ? '#grupo-' + grupo + ' + .campo input, #grupo-' + grupo + ' + .campo textarea' : null,
+      campos: [
+        { tipo: 'grupo', nome: 'valores', rotulo: 'Valores' },
+        { nome: 'valorMensal', rotulo: 'Valor mensal médio (R$)', tipo: 'numero', passo: '0.01', obrigatorio: true },
+        { nome: 'itensInclusos', rotulo: 'O que está incluso', tipo: 'textarea', linhas: 5, ajuda: 'Um item por linha.' },
+        { tipo: 'grupo', nome: 'funcionaria', rotulo: 'Funcionária' },
+        { nome: 'funcionaria.nome', rotulo: 'Nome', tipo: 'texto', obrigatorio: true },
+        { nome: 'funcionaria.descricao', rotulo: 'O que ela faz', tipo: 'textarea' },
+        { nome: 'funcionaria.refeicoes', rotulo: 'Refeições', tipo: 'textarea' },
+        { tipo: 'grupo', nome: 'textos', rotulo: 'Textos' },
+        { nome: 'textos.chamada', rotulo: 'Chamada', tipo: 'texto', ajuda: 'Primeira linha do texto de divulgação para o WhatsApp.' },
+        { nome: 'textos.sobreTitulo', rotulo: 'Título da seção A Casa', tipo: 'texto' },
+        { nome: 'textos.sobreTexto', rotulo: 'História da casa', tipo: 'textarea', linhas: 4 },
+        { nome: 'textos.vagasAbertasTitulo', rotulo: 'Faixa de vagas abertas — título', tipo: 'texto' },
+        { nome: 'textos.vagasAbertasTexto', rotulo: 'Faixa de vagas abertas — texto', tipo: 'texto' },
+        { nome: 'textos.casaCompletaTitulo', rotulo: 'Faixa de casa completa — título', tipo: 'texto' },
+        { nome: 'textos.casaCompletaTexto', rotulo: 'Faixa de casa completa — texto', tipo: 'texto' },
+        { nome: 'textos.mascotesTitulo', rotulo: 'Mascotes — título', tipo: 'texto' },
+        { nome: 'textos.mascotesSubtitulo', rotulo: 'Mascotes — subtítulo', tipo: 'texto' },
+        { tipo: 'grupo', nome: 'endereco', rotulo: 'Endereço & redes' },
+        { nome: 'endereco.rua', rotulo: 'Rua e número', tipo: 'texto', obrigatorio: true },
+        { nome: 'endereco.cidade', rotulo: 'Cidade', tipo: 'texto' },
+        { nome: 'endereco.distancias', rotulo: 'Distâncias (selo)', tipo: 'texto' },
+        { nome: 'instagram', rotulo: 'Instagram da casa', tipo: 'texto', placeholder: '@repsicoitajuba' }
+      ],
+      aoSalvar: function (v) {
+        return store.salvarConfig({
+          valorMensal: v.valorMensal,
+          itensInclusos: String(v.itensInclusos || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean),
+          funcionaria: v.funcionaria,
+          textos: Object.assign({}, cfg.textos, v.textos),
+          endereco: v.endereco,
+          instagram: normalizarInstagram(v.instagram)
+        });
+      }
+    });
+  }
+
+  function abrirTrocarSenha() {
+    abrirFormulario({
+      titulo: 'Trocar a senha da casa',
+      textoSalvar: 'Trocar senha',
+      mensagemSucesso: 'Senha alterada!',
+      campos: [
+        { nome: 'nova', rotulo: 'Nova senha', tipo: 'senha', obrigatorio: true,
+          validar: function (v) { return String(v || '').length < 6 ? 'A senha precisa ter no mínimo 6 caracteres.' : ''; } },
+        { nome: 'confirmacao', rotulo: 'Repita a nova senha', tipo: 'senha', obrigatorio: true,
+          validar: function (v, todos) { return v !== todos.nova ? 'As senhas não conferem.' : ''; } }
+      ],
+      aoSalvar: function (v) { return store.auth.trocarSenha(v.nova); }
+    });
+  }
+
+  async function sair() {
+    await store.auth.sair();
+    toast('Você saiu do Modo Morador.');
   }
 
   /* ======================================================================
@@ -1365,6 +1727,19 @@
       const ok = await copiarTexto(enderecoCompleto());
       if (ok) toast('Endereço copiado!'); else toast('Não foi possível copiar. Selecione o endereço e copie manualmente.', 'erro');
     },
+    'abrir-login': function (alvo) { abrirLogin(alvo); },
+    sair: sair,
+    'mostrar-senha': function (alvo) {
+      const campo = alvo.parentElement.querySelector('input');
+      const mostrar = campo.type === 'password';
+      campo.type = mostrar ? 'text' : 'password';
+      alvo.setAttribute('aria-pressed', String(mostrar));
+      alvo.setAttribute('aria-label', mostrar ? 'Esconder senha' : 'Mostrar senha');
+    },
+    'fechar-modal': function (alvo) { fecharModal(alvo.closest('.modal')); },
+    'abrir-config': function () { abrirConfiguracoes(); },
+    'editar-config': function (alvo) { abrirConfiguracoes(alvo.dataset.grupo); },
+    'trocar-senha': abrirTrocarSenha,
     'lightbox-fechar': fecharLightbox,
     'lightbox-anterior': function () { navegarLightbox(-1); },
     'lightbox-proximo': function () { navegarLightbox(1); }
@@ -1398,10 +1773,6 @@
     get estado() { return estado; }
   };
 
-  function atualizarModoAdmin(logado) {
-    estado.admin = !!logado;
-  }
-
   function ligarNavegacao() {
     document.querySelector('.nav-links').addEventListener('click', function (ev) {
       if (ev.target.closest('a')) definirMenu(false);
@@ -1420,6 +1791,10 @@
     ligarCarrossel();
     ligarLightbox();
     ligarDestaqueNavegacao();
+    ligarModais();
+    document.addEventListener('change', function (ev) {
+      if (ev.target.id === 'toggle-vagas') alternarVagas(ev.target.checked);
+    });
     document.addEventListener('scroll', function (ev) {
       if (ev.target.classList && ev.target.classList.contains('evento-fotos')) atualizarPontosEvento(ev.target);
     }, true);
