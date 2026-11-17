@@ -105,6 +105,416 @@
   }
 
   /* ======================================================================
+     3. UTILITÁRIOS (funções puras)
+     ====================================================================== */
+
+  const COLECOES = ['slides', 'diferenciais', 'galeria', 'mascotes', 'moradores', 'eventos', 'contatos', 'faq'];
+  const CATEGORIAS = { morador: 'Morador', agregado: 'Agregado', ex: 'Ex-Morador' };
+  const ORDEM_CATEGORIA = { morador: 0, agregado: 1, ex: 2 };
+  const ICONE_EMOJI = {
+    pin: '📍', casa: '🏠', game: '🎮', wifi: '📶', chef: '👩‍🍳', talheres: '🍽️', pessoas: '👥', pata: '🐾',
+    chama: '🔥', tv: '📺', cama: '🛏️', chuveiro: '🚿', escudo: '🛡️', estrela: '⭐', coracao: '❤️', musica: '🎵'
+  };
+  const MOEDA = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  function escapeHtml(v) {
+    if (v === null || v === undefined) return '';
+    return String(v).replace(/[&<>"']/g, function (c) { return ESCAPES[c]; });
+  }
+
+  function gerarId() {
+    const a = new Uint32Array(2);
+    crypto.getRandomValues(a);
+    return Date.now().toString(36) + a[0].toString(36) + a[1].toString(36).slice(0, 3);
+  }
+
+  function clonar(v) { return JSON.parse(JSON.stringify(v)); }
+  function ehObjeto(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+
+  function formatarMoeda(n) { return MOEDA.format(Number(n) || 0); }
+
+  function digitosTelefone(t) { return String(t || '').replace(/\D/g, ''); }
+
+  function semDDI(d) { return (d.length === 12 || d.length === 13) && d.startsWith('55') ? d.slice(2) : d; }
+
+  function formatarTelefone(t) {
+    const d = semDDI(digitosTelefone(t));
+    if (d.length === 11) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7);
+    if (d.length === 10) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 6) + '-' + d.slice(6);
+    return String(t || '').trim();
+  }
+
+  // Número nacional (até 11 dígitos) ganha o DDI 55; um número que já vem com 55 + DDD é mantido.
+  function waLink(telefone, mensagem) {
+    let d = digitosTelefone(telefone);
+    if (d.length < 10) return null;
+    if (!(d.startsWith('55') && d.length >= 12)) d = '55' + d;
+    return 'https://wa.me/' + d + (mensagem ? '?text=' + encodeURIComponent(mensagem) : '');
+  }
+
+  function mensagemWhatsApp(contato) {
+    const c = contato || {};
+    const nome = String(c.apelido || '').trim() || String(c.nome || '').trim() || 'galera';
+    return 'Fala ' + nome + '! Vi o site da REPSICO e gostaria de tirar dúvidas / marcar uma visita.';
+  }
+
+  function normalizarInstagram(v) {
+    let s = String(v || '').trim();
+    s = s.replace(/^https?:\/\//i, '').replace(/^(www\.)?instagram\.com\//i, '');
+    s = s.split(/[/?#]/)[0].replace(/^@+/, '');
+    return s.replace(/[^A-Za-z0-9._]/g, '');
+  }
+
+  // Só deixa passar âncoras internas, http(s) e domínios sem esquema (ganham https://).
+  function linkSeguro(v) {
+    const s = String(v || '').trim();
+    if (!s) return '';
+    if (s.charAt(0) === '#') return /^#[\w-]*$/.test(s) ? s : null;
+    if (/^https?:\/\/\S+$/i.test(s)) return s;
+    if (!/[\s:]/.test(s) && /^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(s)) return 'https://' + s;
+    return null;
+  }
+
+  async function sha256Hex(texto) {
+    const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(texto)));
+    return Array.from(new Uint8Array(hash), function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+  }
+
+  function iniciais(apelido) {
+    const partes = String(apelido || '').trim().split(/\s+/).filter(Boolean);
+    if (!partes.length) return '?';
+    const s = partes.length > 1
+      ? Array.from(partes[0])[0] + Array.from(partes[1])[0]
+      : Array.from(partes[0]).slice(0, 2).join('');
+    return s.toLocaleUpperCase('pt-BR');
+  }
+
+  function juntarNomes(nomes) {
+    const l = (nomes || []).filter(Boolean);
+    if (l.length <= 1) return l.join('');
+    return l.slice(0, -1).join(', ') + ' e ' + l[l.length - 1];
+  }
+
+  function chaveTime(nome) {
+    return String(nome || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+
+  // [fundo, texto] dos clubes mais populares; outros times usam o estilo neutro.
+  const TIMES = {
+    flamengo: ['#C3281E', '#FFFFFF'], corinthians: ['#111111', '#FFFFFF'], palmeiras: ['#006437', '#FFFFFF'],
+    'sao paulo': ['#D7141A', '#FFFFFF'], santos: ['#FFFFFF', '#111111'], vasco: ['#111111', '#FFFFFF'],
+    fluminense: ['#7A0E2B', '#FFFFFF'], botafogo: ['#111111', '#FFFFFF'], cruzeiro: ['#0033A0', '#FFFFFF'],
+    'atletico mineiro': ['#111111', '#FFFFFF'], 'america mineiro': ['#00843D', '#FFFFFF'],
+    gremio: ['#0D80BF', '#FFFFFF'], internacional: ['#E30613', '#FFFFFF'],
+    'athletico paranaense': ['#C8102E', '#111111'], coritiba: ['#00544D', '#FFFFFF'], bahia: ['#0057A8', '#FFFFFF'],
+    vitoria: ['#E30613', '#111111'], sport: ['#D71920', '#111111'], fortaleza: ['#0F4C9A', '#FFFFFF'],
+    ceara: ['#111111', '#FFFFFF'], goias: ['#00703C', '#FFFFFF'], 'red bull bragantino': ['#E30613', '#FFFFFF'],
+    'ponte preta': ['#111111', '#FFFFFF'], guarani: ['#00843D', '#FFFFFF'], juventude: ['#00843D', '#FFFFFF']
+  };
+  const APELIDOS_TIMES = {
+    'atletico mg': 'atletico mineiro', atletico: 'atletico mineiro', galo: 'atletico mineiro',
+    'america mg': 'america mineiro', america: 'america mineiro', 'athletico pr': 'athletico paranaense',
+    athletico: 'athletico paranaense', 'atletico pr': 'athletico paranaense', 'atletico paranaense': 'athletico paranaense',
+    inter: 'internacional', colorado: 'internacional', spfc: 'sao paulo', 'sao paulo fc': 'sao paulo',
+    bragantino: 'red bull bragantino', 'rb bragantino': 'red bull bragantino', timao: 'corinthians',
+    mengao: 'flamengo', verdao: 'palmeiras', 'vasco da gama': 'vasco', fogao: 'botafogo', raposa: 'cruzeiro',
+    peixe: 'santos', tricolor: 'sao paulo', 'gremio fbpa': 'gremio'
+  };
+  function coresTime(nome) {
+    const k = chaveTime(nome);
+    const cores = TIMES[APELIDOS_TIMES[k] || k];
+    return cores ? cores.slice() : null;
+  }
+
+  const MENSAGENS_ERRO = {
+    'senha-incorreta': 'Senha incorreta.',
+    'auth/wrong-password': 'Senha incorreta.',
+    'auth/invalid-credential': 'Senha incorreta.',
+    'auth/invalid-login-credentials': 'Senha incorreta.',
+    'auth/user-not-found': 'Senha incorreta.',
+    'auth/too-many-requests': 'Muitas tentativas. Aguarde alguns minutos e tente de novo.',
+    'permission-denied': 'Sua sessão expirou — entre de novo.',
+    unauthenticated: 'Sua sessão expirou — entre de novo.',
+    offline: 'Sem conexão com o Firebase. Tente de novo.',
+    unavailable: 'Sem conexão com o Firebase. Tente de novo.',
+    'deadline-exceeded': 'Sem conexão com o Firebase. Tente de novo.',
+    'auth/network-request-failed': 'Sem conexão com o Firebase. Tente de novo.',
+    cota: 'Espaço local cheio — conecte o Firebase para salvar mais fotos.',
+    QuotaExceededError: 'Espaço local cheio — conecte o Firebase para salvar mais fotos.',
+    'resource-exhausted': 'Limite diário gratuito do Firebase atingido. Tente de novo amanhã.',
+    'senha-fraca': 'A senha precisa ter no mínimo 6 caracteres.',
+    'auth/weak-password': 'A senha precisa ter no mínimo 6 caracteres.',
+    'auth/requires-recent-login': 'Por segurança, saia e entre de novo antes de trocar a senha.',
+    'auth/operation-not-allowed': 'Ative o login por e-mail/senha no Firebase (veja o README).',
+    'auth/user-disabled': 'O usuário dos moradores está desativado no Firebase.',
+    'formato-imagem': 'Formato de imagem não suportado.'
+  };
+  function mensagemErro(erro) {
+    const codigo = erro && (erro.codigo || erro.code || erro.name);
+    return (codigo && MENSAGENS_ERRO[codigo]) || 'Algo deu errado. Tente de novo.';
+  }
+
+  /* ======================================================================
+     4. CONTEÚDO INICIAL (pré-populado; tudo editável no Modo Morador)
+     ====================================================================== */
+
+  const CONTEUDO_INICIAL = {
+    versao: 1,
+    config: {
+      vagasAbertas: true,
+      valorMensal: 900,
+      itensInclusos: [
+        'Aluguel e contas da casa (água, luz e gás)',
+        'Internet fibra óptica 800MB',
+        'Dona Zilda de segunda a sexta',
+        'Almoço e janta de segunda a sexta',
+        'Todos os streamings'
+      ],
+      funcionaria: {
+        nome: 'Dona Zilda',
+        descricao: 'De segunda a sexta: limpa, cozinha, lava e passa roupa.',
+        refeicoes: 'Almoço e janta inclusos de segunda a sexta, com cardápio variado.'
+      },
+      textos: {
+        chamada: 'República masculina em Itajubá-MG com mais de 18 anos de história.',
+        sobreTitulo: 'Mais que uma casa: uma família',
+        sobreTexto: 'República Masculina com mais de 18 anos de tradições, festas, risadas e apoio em Itajubá. ' +
+          'Aqui cada morador encontra parceria nos estudos, amizade para a vida toda e uma casa que funciona de verdade, ' +
+          'a 2 minutos da UNIFEI.',
+        vagasAbertasTitulo: 'VAGAS ABERTAS NA REPSICO!',
+        vagasAbertasTexto: 'Venha fazer parte da nossa família',
+        casaCompletaTitulo: 'Casa Completa no Momento',
+        casaCompletaTexto: 'Acompanhe nossos rolês no Instagram @repsicoitajuba',
+        mascotesTitulo: 'Zé e Mingau',
+        mascotesSubtitulo: 'Os verdadeiros donos da casa'
+      },
+      endereco: {
+        rua: 'Rua Coronel Francisco Braz, 1256',
+        cidade: 'Itajubá - MG',
+        distancias: '2 min da UNIFEI • 8 min do Centro'
+      },
+      instagram: 'repsicoitajuba'
+    },
+    slides: {
+      s1: {
+        tag: 'VAGAS', titulo: 'Vagas abertas a 2 min da UNIFEI',
+        descricao: 'Casa mobiliada, comida caseira de segunda a sexta e tudo incluso no valor mensal. Vem conhecer a REPSICO!',
+        destaque: '2 MIN', botaoTexto: 'Quero uma vaga', botaoLink: '#localizacao', imagem: null, somenteComVagas: true, ordem: 1
+      },
+      s2: {
+        tag: 'TRADIÇÃO', titulo: 'Mais de 18 anos de história e festas',
+        descricao: 'Gerações de moradores, rolês que viraram tradição e amizades que duram muito além da formatura.',
+        destaque: '18+ ANOS', botaoTexto: 'Ver os rolês', botaoLink: '#eventos', imagem: null, somenteComVagas: false, ordem: 2
+      },
+      s3: {
+        tag: 'A CASA', titulo: 'Infraestrutura completa, lazer e mascotes',
+        descricao: 'Churrasqueira, quintal amplo, sinuca, PS3, PS4, streamings e internet fibra 800MB. E o Zé e o Mingau esperando por você.',
+        destaque: 'TUDO INCLUSO', botaoTexto: 'Conhecer a casa', botaoLink: '#casa', imagem: null, somenteComVagas: false, ordem: 3
+      }
+    },
+    diferenciais: {
+      d1: { icone: 'pin', titulo: 'Localização', texto: '2 min da UNIFEI e 8 min do centro.', ordem: 1 },
+      d2: { icone: 'casa', titulo: 'Estrutura', texto: 'Casa mobiliada com 5 quartos (1 suíte) e 3 banheiros.', ordem: 2 },
+      d3: { icone: 'game', titulo: 'Lazer', texto: 'Área de churrasco, quintal amplo, mesa de sinuca, PS3, PS4 e todos os streamings.', ordem: 3 },
+      d4: { icone: 'wifi', titulo: 'Internet', texto: 'Fibra óptica 800MB com 2 pontos pela casa.', ordem: 4 }
+    },
+    galeria: {},
+    mascotes: {
+      z1: { nome: 'Zé', descricao: 'Chefe da segurança e fiscal oficial do churrasco. Nada passa pelo portão sem ele saber.', foto: null, ordem: 1 },
+      z2: { nome: 'Mingau', descricao: 'Especialista em sonecas, mestre em ganhar carinho de visita e dono do melhor lugar do sofá.', foto: null, ordem: 2 }
+    },
+    moradores: {
+      m1: { apelido: 'Pantufa', nome: 'Thiago', curso: '', anoEntrada: null, time: '', categoria: 'morador', instagram: '', foto: null },
+      m2: { apelido: 'Dodô', nome: 'Lucas', curso: '', anoEntrada: null, time: '', categoria: 'morador', instagram: '', foto: null }
+    },
+    eventos: {
+      e1: {
+        titulo: 'Churrasco de Boas-Vindas',
+        descricao: 'Todo começo de semestre a casa recebe os bixos com churrasco no quintal, música e sinuca valendo. É o jeito REPSICO de dizer "seja bem-vindo".',
+        fotos: [], ordem: 1
+      },
+      e2: {
+        titulo: 'Resenha da REPSICO',
+        descricao: 'A clássica resenha da casa: moradores, agregados e ex-moradores reunidos para comemorar o fim das provas com muita risada.',
+        fotos: [], ordem: 2
+      }
+    },
+    contatos: {
+      c1: { nome: 'Thiago', apelido: 'Pantufa', telefone: '(35) 9191-5374', ordem: 1 },
+      c2: { nome: 'Lucas', apelido: 'Dodô', telefone: '(19) 99977-8860', ordem: 2 }
+    },
+    faq: {
+      f1: {
+        pergunta: 'Como funciona o período de agregado?',
+        resposta: 'Antes de virar morador, você passa um tempo como agregado: mora na casa, participa da rotina e dos rolês e todo mundo se conhece de verdade. No fim, a casa conversa e decide junto — é o jeito de garantir que a convivência funcione para todos.',
+        ordem: 1
+      },
+      f2: {
+        pergunta: 'Os quartos são mobiliados?',
+        resposta: 'Sim, a casa é mobiliada. Na visita você conhece os quartos disponíveis e combina com a galera o que precisa trazer.',
+        ordem: 2
+      },
+      f3: {
+        pergunta: 'Como são divididas as contas?',
+        resposta: 'O valor mensal é uma média que já inclui tudo: aluguel, contas da casa, internet, streamings, a funcionária e as refeições de segunda a sexta. Os custos são divididos entre os moradores e o valor pode variar um pouco de um mês para o outro.',
+        ordem: 3
+      },
+      f4: {
+        pergunta: 'Como é a rotina da casa?',
+        resposta: 'Durante a semana a Dona Zilda cuida da limpeza e das roupas e prepara almoço e janta. Cada morador cuida das suas coisas e segue as regras de convivência combinadas entre todos — com respeito ao horário de estudo de cada um.',
+        ordem: 4
+      },
+      f5: {
+        pergunta: 'O que está incluso no valor mensal?',
+        resposta: 'Tudo o que aparece no card de valores da seção A Casa: moradia, contas, internet fibra 800MB, streamings, a funcionária de segunda a sexta e almoço e janta nos dias úteis.',
+        ordem: 5
+      },
+      f6: {
+        pergunta: 'Como agendo uma visita? Os pais podem vir junto?',
+        resposta: 'Claro! É só chamar um dos responsáveis no WhatsApp (na seção Localização) e combinar o melhor horário. Pais e responsáveis são sempre bem-vindos para conhecer a casa.',
+        ordem: 6
+      }
+    }
+  };
+
+  const PADROES_ITEM = {
+    slides: { tag: '', titulo: '', descricao: '', destaque: '', botaoTexto: '', botaoLink: '', imagem: null, somenteComVagas: false },
+    diferenciais: { icone: 'estrela', titulo: '', texto: '' },
+    galeria: { imagem: null, legenda: '' },
+    mascotes: { nome: '', descricao: '', foto: null },
+    moradores: { apelido: '', nome: '', curso: '', anoEntrada: null, time: '', categoria: 'morador', instagram: '', foto: null },
+    eventos: { titulo: '', descricao: '', fotos: [] },
+    contatos: { nome: '', apelido: '', telefone: '' },
+    faq: { pergunta: '', resposta: '' }
+  };
+  const CAMPOS_IMAGEM = { slides: 'imagem', galeria: 'imagem', mascotes: 'foto', moradores: 'foto' };
+
+  function normalizarItem(colecao, bruto, indice) {
+    const item = Object.assign({}, PADROES_ITEM[colecao], bruto);
+    const campoImagem = CAMPOS_IMAGEM[colecao];
+    if (campoImagem) item[campoImagem] = typeof item[campoImagem] === 'string' && item[campoImagem] ? item[campoImagem] : null;
+    if (colecao === 'eventos') {
+      item.fotos = Array.isArray(item.fotos) ? item.fotos.filter(function (f) { return typeof f === 'string' && f; }) : [];
+    }
+    if (colecao === 'moradores') {
+      if (!CATEGORIAS[item.categoria]) item.categoria = 'morador';
+      const ano = parseInt(item.anoEntrada, 10);
+      item.anoEntrada = Number.isFinite(ano) ? ano : null;
+      item.instagram = normalizarInstagram(item.instagram);
+    } else {
+      const ordem = Number(item.ordem);
+      item.ordem = Number.isFinite(ordem) && item.ordem !== null && item.ordem !== '' ? ordem : indice + 1;
+    }
+    if (colecao === 'slides') item.somenteComVagas = item.somenteComVagas === true;
+    return item;
+  }
+
+  function normalizar(entrada) {
+    if (!ehObjeto(entrada)) return clonar(CONTEUDO_INICIAL);
+    const e = clonar(entrada);
+    const base = CONTEUDO_INICIAL.config;
+    const cfg = ehObjeto(e.config) ? e.config : {};
+    const config = Object.assign(clonar(base), cfg);
+    ['funcionaria', 'textos', 'endereco'].forEach(function (k) {
+      config[k] = Object.assign({}, base[k], ehObjeto(cfg[k]) ? cfg[k] : {});
+    });
+    if (!Array.isArray(config.itensInclusos)) config.itensInclusos = base.itensInclusos.slice();
+    config.vagasAbertas = config.vagasAbertas !== false;
+    const valor = Number(config.valorMensal);
+    config.valorMensal = Number.isFinite(valor) ? valor : base.valorMensal;
+    config.instagram = normalizarInstagram(config.instagram);
+    const saida = { versao: 1, config: config };
+    COLECOES.forEach(function (col) {
+      const mapa = ehObjeto(e[col]) ? e[col] : {};
+      const itens = {};
+      Object.keys(mapa).forEach(function (id, i) {
+        if (/^[A-Za-z0-9_-]+$/.test(id) && ehObjeto(mapa[id])) itens[id] = normalizarItem(col, mapa[id], i);
+      });
+      saida[col] = itens;
+    });
+    return saida;
+  }
+
+  function ordenarMoradores(lista) {
+    return lista.slice().sort(function (a, b) {
+      const ca = ORDEM_CATEGORIA[a.categoria] !== undefined ? ORDEM_CATEGORIA[a.categoria] : 9;
+      const cb = ORDEM_CATEGORIA[b.categoria] !== undefined ? ORDEM_CATEGORIA[b.categoria] : 9;
+      if (ca !== cb) return ca - cb;
+      const ya = Number(a.anoEntrada) || Infinity;
+      const yb = Number(b.anoEntrada) || Infinity;
+      if (ya !== yb) return ya - yb;
+      return String(a.apelido || '').localeCompare(String(b.apelido || ''), 'pt-BR', { sensitivity: 'base' });
+    });
+  }
+
+  function listar(conteudo, colecao) {
+    const mapa = (conteudo && conteudo[colecao]) || {};
+    const lista = Object.keys(mapa).map(function (id) { return Object.assign({ id: id }, mapa[id]); });
+    if (colecao === 'moradores') return ordenarMoradores(lista);
+    return lista.sort(function (a, b) {
+      return ((Number(a.ordem) || 0) - (Number(b.ordem) || 0)) || String(a.id).localeCompare(String(b.id));
+    });
+  }
+
+  function proximaOrdem(mapa) {
+    let maior = 0;
+    Object.keys(mapa || {}).forEach(function (id) {
+      const o = Number(mapa[id] && mapa[id].ordem);
+      if (o > maior) maior = o;
+    });
+    return maior + 1;
+  }
+
+  function coletarIdsImagens(c) {
+    const ids = new Set();
+    function add(id) { if (typeof id === 'string' && id) ids.add(id); }
+    ['slides', 'galeria'].forEach(function (col) {
+      Object.values((c && c[col]) || {}).forEach(function (i) { add(i && i.imagem); });
+    });
+    ['moradores', 'mascotes'].forEach(function (col) {
+      Object.values((c && c[col]) || {}).forEach(function (i) { add(i && i.foto); });
+    });
+    Object.values((c && c.eventos) || {}).forEach(function (e) { ((e && e.fotos) || []).forEach(add); });
+    return Array.from(ids).sort();
+  }
+
+  function gerarTextoDivulgacao(conteudo, urlSite) {
+    const c = normalizar(conteudo);
+    const cfg = c.config;
+    const f = cfg.funcionaria;
+    const linhas = [];
+    linhas.push(cfg.vagasAbertas ? '🔴⚫ *VAGAS ABERTAS NA REPSICO!* ⚫🔴' : '*REPSICO — República masculina em Itajubá-MG*');
+    if (cfg.textos.chamada) linhas.push(cfg.textos.chamada);
+    linhas.push('');
+    linhas.push('📍 ' + cfg.endereco.rua + (cfg.endereco.distancias ? ' — ' + cfg.endereco.distancias : ''));
+    listar(c, 'diferenciais').forEach(function (d) {
+      linhas.push((ICONE_EMOJI[d.icone] || '✅') + ' *' + d.titulo + ':* ' + d.texto);
+    });
+    if (f.nome) linhas.push('👩‍🍳 *' + f.nome + ':* ' + f.descricao);
+    if (f.refeicoes) linhas.push('🍽️ ' + f.refeicoes);
+    const mascotes = listar(c, 'mascotes').map(function (m) { return m.nome; }).filter(Boolean);
+    if (mascotes.length) linhas.push('🐾 Mascotes: ' + juntarNomes(mascotes));
+    linhas.push('');
+    linhas.push('💰 *' + formatarMoeda(cfg.valorMensal) + '/mês — tudo incluso*');
+    const contatos = listar(c, 'contatos');
+    if (contatos.length) {
+      linhas.push('');
+      linhas.push(cfg.vagasAbertas ? '📲 Agende sua visita:' : '📲 Contato:');
+      contatos.forEach(function (ct) {
+        const link = waLink(ct.telefone);
+        linhas.push('• ' + ct.nome + (ct.apelido ? ' (' + ct.apelido + ')' : '') + ': ' + ct.telefone +
+          (link ? ' — ' + link.replace('https://', '') : ''));
+      });
+    }
+    linhas.push('');
+    if (urlSite) linhas.push('🌐 ' + urlSite);
+    if (cfg.instagram) linhas.push('📸 Instagram: @' + cfg.instagram);
+    return linhas.join('\n');
+  }
+
+  /* ======================================================================
      8. COMPONENTES — tema e menu
      ====================================================================== */
 
@@ -149,7 +559,19 @@
   let resolverPronto;
   const pronto = new Promise(function (resolver) { resolverPronto = resolver; });
 
-  window.REPSICO = { pronto: pronto, utils: {} };
+  window.REPSICO = {
+    pronto: pronto,
+    utils: {
+      escapeHtml: escapeHtml, gerarId: gerarId, formatarMoeda: formatarMoeda, digitosTelefone: digitosTelefone,
+      formatarTelefone: formatarTelefone, waLink: waLink, mensagemWhatsApp: mensagemWhatsApp,
+      normalizarInstagram: normalizarInstagram, linkSeguro: linkSeguro, sha256Hex: sha256Hex, iniciais: iniciais,
+      juntarNomes: juntarNomes, chaveTime: chaveTime, coresTime: coresTime, mensagemErro: mensagemErro,
+      normalizar: normalizar, listar: listar, ordenarMoradores: ordenarMoradores, proximaOrdem: proximaOrdem,
+      coletarIdsImagens: coletarIdsImagens, gerarTextoDivulgacao: gerarTextoDivulgacao,
+      COLECOES: COLECOES, CATEGORIAS: CATEGORIAS, ICONE_EMOJI: ICONE_EMOJI
+    },
+    get CONTEUDO_INICIAL() { return clonar(CONTEUDO_INICIAL); }
+  };
 
   function ligarNavegacao() {
     document.querySelector('.nav-links').addEventListener('click', function (ev) {
