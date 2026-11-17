@@ -491,7 +491,13 @@ main { padding-top: var(--nav-h); }
 .vazio { margin: 0; padding: 22px; border: 2px dashed var(--border); border-radius: var(--raio); color: var(--text-muted); text-align: center; }
 .grid-galeria .vazio { grid-column: 1 / -1; }
 
-img[data-img]:not([src]) { background: linear-gradient(110deg, var(--bg-card) 30%, var(--border) 50%, var(--bg-card) 70%); background-size: 200% 100%; animation: brilho 1.4s linear infinite; }
+/* Fotos sob demanda: invisíveis até carregar (sem ícone de imagem quebrada); a moldura mostra um brilho. */
+img[data-img] { transition: opacity 300ms ease; }
+img[data-img]:not(.carregada) { opacity: 0; }
+:is(.galeria-abrir, .morador-foto, .evento-foto, .hero-midia, .mascote-foto, .previa-imagem, .miniatura):has(> img[data-img]:not(.carregada):not(.sem-imagem)) {
+  background: linear-gradient(110deg, var(--bg-card) 30%, var(--border) 50%, var(--bg-card) 70%);
+  background-size: 200% 100%; animation: brilho 1.4s linear infinite;
+}
 @keyframes brilho { to { background-position: -200% 0; } }
 
 .mascotes-card {
