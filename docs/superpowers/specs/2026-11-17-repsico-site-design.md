@@ -109,6 +109,11 @@ README.md            guia objetivo (§8.13)
 docs/superpowers/…   este design e o plano (não afetam o site)
 ```
 
+- **Origem da logo:** a imagem anexada pelo usuário na conversa.
+  - Original: PNG 1024×1024, RGB sem transparência. É o selo redondo preto e branco com "REPÚBLICA REPSICO" sobre fundo vermelho.
+  - No site: reduzida para 512×512 e otimizada.
+  - Como tem fundo vermelho próprio, funciona igual nos dois temas. Na navbar e no rodapé aparece com cantos arredondados.
+
 - **[minha decisão]** `app.js` é um **script clássico** (`<script src="app.js" defer>`), não um módulo. O SDK do Firebase é carregado com `import()` dinâmico **só quando o `firebaseConfig` estiver preenchido**.
   - Efeito 1: o modo local funciona até abrindo o `index.html` com dois cliques (`file://`).
   - Efeito 2: no modo local, nenhum byte do Firebase é baixado.
@@ -172,14 +177,15 @@ conteudo = {
     valorMensal: 900,
     itensInclusos: [string],                       // lista do card de transparência
     funcionaria: { nome, descricao, refeicoes },
-    textos: { sobreTitulo, sobreTexto,
+    textos: { chamada,                              // 1ª linha do texto de divulgação (§8.9)
+              sobreTitulo, sobreTexto,
               vagasAbertasTitulo, vagasAbertasTexto,
               casaCompletaTitulo, casaCompletaTexto,
               mascotesTitulo, mascotesSubtitulo },
     endereco: { rua, cidade, distancias },          // distancias = "2 min da UNIFEI • 8 min do Centro"
     instagram: "repsicoitajuba"
   },
-  slides:       { [id]: { tag, titulo, descricao, destaque, botaoTexto, botaoLink, imagem, ordem } },
+  slides:       { [id]: { tag, titulo, descricao, destaque, botaoTexto, botaoLink, imagem, somenteComVagas, ordem } },
   diferenciais: { [id]: { icone, titulo, texto, ordem } },
   galeria:      { [id]: { imagem, legenda, ordem } },
   mascotes:     { [id]: { nome, descricao, foto, ordem } },
@@ -304,6 +310,7 @@ Rodapé
   - Swipe no toque. Setas do teclado quando o carrossel tem foco.
 - Slide sem foto: placeholder da marca, com degradê vermelho, **anéis concêntricos** (referência aos olhos em espiral da logo) e o texto `destaque` em tamanho gigante (ex.: "2 MIN"). Sem `destaque`, aparece a logo **[minha decisão]**.
 - `botaoLink`: âncora (`#localizacao`) ou URL (abre em nova aba).
+- **[minha decisão]** Slide com `somenteComVagas` ("Mostrar só quando houver vagas") some do carrossel para visitantes quando a casa está completa. O morador ainda o vê, com a marcação "oculto: casa completa". Assim o slide "Vagas abertas" não contradiz a faixa.
 
 **2. Faixa de vagas** (controlada por `config.vagasAbertas`):
 - **Abertas (padrão):** faixa vermelha com ponto pulsante e "VAGAS ABERTAS NA REPSICO! Venha fazer parte da nossa família". O botão "Agendar visita no WhatsApp" abre o WhatsApp do **primeiro contato** (pela ordem) com a mensagem padrão. Sem contatos, rola até #localizacao.
@@ -404,7 +411,7 @@ Gerado a partir do conteúdo atual e copiado com `navigator.clipboard.writeText`
 
 ```
 🔴⚫ *VAGAS ABERTAS NA REPSICO!* ⚫🔴
-República masculina em Itajubá-MG com mais de 18 anos de história.
+<textos.chamada>
 
 📍 <rua> — <distancias>
 <para cada diferencial, em ordem: emoji do ícone + *título:* texto>
@@ -422,6 +429,8 @@ República masculina em Itajubá-MG com mais de 18 anos de história.
 ```
 
 Com a casa completa, o título vira "*REPSICO — República masculina em Itajubá-MG*", sem "vagas abertas".
+
+**[minha decisão]** Nenhum fato da casa fica fixo no modelo: a linha de apresentação vem de `textos.chamada`, editável em Configurações → Textos. Assim o "mais de 18 anos" não fica desatualizado no código.
 
 ### 8.10 Visual, tema e acessibilidade
 
@@ -463,9 +472,13 @@ service cloud.firestore {
 ```
 
 - As regras verificam **o e-mail**, e não "qualquer usuário logado": com a configuração pública, qualquer pessoa conseguiria criar uma conta própria. O README também recomenda desativar "Criação de contas" em Authentication → Configurações.
-- **[minha decisão]** O README recomenda que o `EMAIL_MORADORES` seja **um e-mail que a casa controla** (ex.: o Gmail da república).
+- **[minha decisão] E-mail do login:** o padrão continua `moradores@repsico.com`, o exemplo da especificação.
+  - No passo do Firebase, o README pede para **escolher o e-mail antes de criar o usuário** e recomenda um que a casa controla (ex.: o Gmail da república).
   - *Motivo:* qualquer pessoa pode pedir "redefinir senha" para esse e-mail. Se o domínio `repsico.com` for de outra pessoa, ela receberia o link.
-  - Se mudarem o e-mail, precisam mudar nos dois lugares: `app.js` e regras.
+  - O README mostra exatamente as duas linhas a trocar: a constante no `app.js` e a linha das regras.
+  - **Recuperação de senha:**
+    - Com e-mail real, pelo e-mail de redefinição do Firebase.
+    - Caso contrário, excluindo e recriando o usuário no console com o mesmo e-mail. As regras checam o e-mail, então nada mais muda.
 - Todo texto vindo do conteúdo é escapado (`escapeHtml`) antes de ir para o `innerHTML`. Links de Instagram, WhatsApp e `botaoLink` são montados e validados (só `http(s):`, `#âncora` ou `wa.me`).
 
 ### 8.13 README (em português, objetivo)
@@ -490,7 +503,7 @@ service cloud.firestore {
 Fatos dados pelo usuário entram literalmente. O que não foi dado está marcado como **exemplo genérico** e deve ser revisado pelos moradores pelo painel.
 
 - **Slides (3):**
-  1. `VAGAS` · "Vagas abertas a 2 min da UNIFEI" · destaque "2 MIN" · botão "Quero uma vaga" → `#localizacao`.
+  1. `VAGAS` · "Vagas abertas a 2 min da UNIFEI" · destaque "2 MIN" · botão "Quero uma vaga" → `#localizacao` · `somenteComVagas: true`.
   2. `TRADIÇÃO` · "Mais de 18 anos de história e festas" · destaque "18+ ANOS" · "Ver os rolês" → `#eventos`.
   3. `A CASA` · "Infraestrutura completa, lazer e mascotes" · destaque "TUDO INCLUSO" · "Conhecer a casa" → `#casa`.
 
@@ -499,6 +512,7 @@ Fatos dados pelo usuário entram literalmente. O que não foi dado está marcado
   - Vagas abertas: sim. Valor: 900.
   - Itens inclusos (exemplo genérico a revisar): aluguel e contas da casa; internet fibra 800MB; Dona Zilda de seg. a sex.; almoço e janta de seg. a sex.; streamings.
   - Funcionária: Dona Zilda. "De segunda a sexta: limpa, cozinha, lava e passa roupa." / "Almoço e janta inclusos de segunda a sexta, com cardápio variado."
+  - Chamada (divulgação): "República masculina em Itajubá-MG com mais de 18 anos de história."
   - Sobre: "República Masculina com mais de 18 anos de tradições, festas, risadas e apoio em Itajubá." (+ 1–2 frases no mesmo tom).
   - Textos das faixas: conforme a especificação.
   - Endereço: Rua Coronel Francisco Braz, 1256 · Itajubá - MG · "2 min da UNIFEI • 8 min do Centro".
@@ -550,7 +564,7 @@ Fatos dados pelo usuário entram literalmente. O que não foi dado está marcado
 2. Fotos do modo local no IndexedDB, não no `localStorage` (§8.2).
 3. `app.js` como script clássico com `import()` dinâmico do Firebase, abrindo até por `file://` (§8.1).
 4. Botão "Trocar senha" (§8.5) e senha padrão `repsico` no modo local.
-5. Recomendação de usar um e-mail que a casa controla em `EMAIL_MORADORES` (§8.12).
+5. `EMAIL_MORADORES` padrão `moradores@repsico.com`, com o README recomendando um e-mail que a casa controla e explicando a recuperação de senha nos dois casos (§8.12).
 6. Reordenar itens com ↑ ↓ (§8.3); limite de 12 fotos por rolê (§8.4).
 7. Galeria escondida para visitantes quando vazia; placeholders da marca quando não há foto (§8.7).
 8. Badges de time com cores dos clubes (§8.7).
@@ -558,6 +572,8 @@ Fatos dados pelo usuário entram literalmente. O que não foi dado está marcado
 10. Open Graph apontando para `lucaspivoto.github.io/Republica-Repsico` (§8.10).
 11. Cache do último conteúdo para quando o Firebase não carregar (§8.2).
 12. Testes fora do repositório (§10).
+13. Slides "só com vagas" somem quando a casa está completa (§8.7).
+14. Linha de apresentação da divulgação editável (`textos.chamada`) em vez de fixa no código (§8.9).
 
 ## 12. Deixado para o construtor
 
