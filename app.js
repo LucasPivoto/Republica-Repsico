@@ -326,8 +326,8 @@
       z2: { nome: 'Mingau', descricao: 'Especialista em sonecas, mestre em ganhar carinho de visita e dono do melhor lugar do sofá.', foto: null, ordem: 2 }
     },
     moradores: {
-      m1: { apelido: 'Pantufa', nome: 'Thiago', curso: '', anoEntrada: null, time: '', categoria: 'morador', instagram: '', foto: null },
-      m2: { apelido: 'Dodô', nome: 'Lucas', curso: '', anoEntrada: null, time: '', categoria: 'morador', instagram: '', foto: null }
+      pantufa: { apelido: 'Pantufa', nome: 'Thiago', curso: '', anoEntrada: null, time: '', categoria: 'morador', instagram: '', foto: null },
+      dodo: { apelido: 'Dodô', nome: 'Lucas', curso: '', anoEntrada: null, time: '', categoria: 'morador', instagram: '', foto: null }
     },
     eventos: {
       e1: {
@@ -703,6 +703,8 @@
     renderHero();
     renderVagas();
     renderCasa();
+    renderMoradores();
+    renderEventos();
     hidratarImagens(document);
   }
 
@@ -962,6 +964,105 @@
       '</div>';
   }
 
+  /* ---- Moradores ---- */
+  const FILTROS_MORADORES = [['todos', 'Todos'], ['morador', 'Moradores Atuais'], ['agregado', 'Agregados'], ['ex', 'Ex-Moradores']];
+  const VAZIO_MORADORES = {
+    todos: 'Nenhum morador cadastrado ainda.',
+    morador: 'Nenhum morador atual cadastrado ainda.',
+    agregado: 'Nenhum agregado cadastrado ainda.',
+    ex: 'Nenhum ex-morador cadastrado ainda.'
+  };
+
+  function renderMoradores() {
+    const todos = listar(estado.conteudo, 'moradores');
+    const filtro = estado.filtroMoradores;
+    const contagem = { todos: todos.length, morador: 0, agregado: 0, ex: 0 };
+    todos.forEach(function (m) { contagem[m.categoria] += 1; });
+    document.querySelector('#moradores .filtros').innerHTML = FILTROS_MORADORES.map(function (f) {
+      return '<button type="button" class="chip" data-acao="filtrar-moradores" data-filtro="' + f[0] + '" aria-pressed="' +
+        (f[0] === filtro) + '">' + f[1] + ' <span class="chip-contagem">(' + contagem[f[0]] + ')</span></button>';
+    }).join('');
+    const lista = filtro === 'todos' ? todos : todos.filter(function (m) { return m.categoria === filtro; });
+    const el = document.getElementById('lista-moradores');
+    el.innerHTML = lista.length ? lista.map(htmlMorador).join('') : '<p class="vazio">' + VAZIO_MORADORES[filtro] + '</p>';
+    hidratarImagens(el);
+  }
+
+  function htmlMorador(m) {
+    const cores = m.time ? coresTime(m.time) : null;
+    const curso = [m.curso, m.anoEntrada ? 'desde ' + m.anoEntrada : ''].filter(Boolean).join(' · ');
+    return '<article class="card-morador">' +
+      '<div class="morador-foto">' +
+        (m.foto ? imgTag(m.foto, 'Foto de ' + m.apelido) : '<div class="placeholder-iniciais" aria-hidden="true">' + escapeHtml(iniciais(m.apelido)) + '</div>') +
+        '<span class="badge-categoria categoria-' + m.categoria + '">' + CATEGORIAS[m.categoria] + '</span>' +
+      '</div>' +
+      '<div class="morador-info">' +
+        '<h3 class="morador-apelido">' + escapeHtml(m.apelido) + '</h3>' +
+        (m.nome ? '<p class="morador-nome">' + escapeHtml(m.nome) + '</p>' : '') +
+        (curso ? '<p class="morador-curso">' + icone('curso') + '<span>' + escapeHtml(curso) + '</span></p>' : '') +
+        ((m.time || m.instagram) ? '<div class="morador-rodape">' +
+          (m.time ? '<span class="badge-time' + (cores ? '' : ' neutro') + '"' +
+            (cores ? ' style="background:' + cores[0] + ';color:' + cores[1] + '"' : '') + '>' + icone('bola') + escapeHtml(m.time) + '</span>' : '') +
+          (m.instagram ? '<a class="btn-instagram" href="https://instagram.com/' + escapeHtml(m.instagram) +
+            '" target="_blank" rel="noopener">' + icone('instagram') + '@' + escapeHtml(m.instagram) + '</a>' : '') +
+        '</div>' : '') +
+      '</div>' +
+    '</article>';
+  }
+
+  /* ---- Eventos & Rolês ---- */
+  function renderEventos() {
+    const lista = listar(estado.conteudo, 'eventos');
+    document.getElementById('lista-eventos').innerHTML = lista.length
+      ? lista.map(htmlEvento).join('')
+      : '<p class="vazio">Em breve: os rolês da REPSICO.</p>';
+  }
+
+  function htmlEvento(e) {
+    const fotos = e.fotos;
+    const varias = fotos.length > 1;
+    let midia;
+    if (fotos.length) {
+      midia = '<div class="evento-fotos">' + fotos.map(function (id, i) {
+        return '<button type="button" class="evento-foto" data-acao="abrir-evento" data-id="' + escapeHtml(e.id) + '" data-indice="' + i +
+          '" aria-label="Ampliar foto ' + (i + 1) + ' de ' + fotos.length + '">' + imgTag(id, e.titulo + ' — foto ' + (i + 1)) + '</button>';
+      }).join('') + '</div>' +
+      (varias ? '<button type="button" class="evento-seta evento-anterior" data-acao="evento-anterior" aria-label="Foto anterior">' + icone('seta-esq') + '</button>' +
+        '<button type="button" class="evento-seta evento-proximo" data-acao="evento-proximo" aria-label="Próxima foto">' + icone('seta-dir') + '</button>' +
+        '<div class="evento-pontos">' + fotos.map(function (id, i) {
+          return '<button type="button" data-acao="evento-ir" data-indice="' + i + '" aria-label="Ver foto ' + (i + 1) + '"' +
+            (i === 0 ? ' aria-current="true"' : '') + '></button>';
+        }).join('') + '</div>' : '');
+    } else {
+      midia = placeholderMarca('');
+    }
+    return '<article class="card-evento" data-id="' + escapeHtml(e.id) + '">' +
+      '<div class="evento-midia">' + midia + '</div>' +
+      '<div class="evento-corpo">' +
+        '<h3 class="evento-titulo">' + escapeHtml(e.titulo) + '</h3>' +
+        (e.descricao ? '<p class="evento-descricao">' + escapeHtml(e.descricao) + '</p>' : '') +
+      '</div>' +
+    '</article>';
+  }
+
+  function trilhoDoEvento(alvo) {
+    const card = alvo.closest('.card-evento');
+    return card ? card.querySelector('.evento-fotos') : null;
+  }
+
+  function moverFotoEvento(alvo, passo) {
+    const trilho = trilhoDoEvento(alvo);
+    if (trilho) trilho.scrollBy({ left: passo * trilho.clientWidth, behavior: prefereMenosMovimento.matches ? 'auto' : 'smooth' });
+  }
+
+  function atualizarPontosEvento(trilho) {
+    const card = trilho.closest('.card-evento');
+    const atual = Math.round(trilho.scrollLeft / Math.max(trilho.clientWidth, 1));
+    card.querySelectorAll('.evento-pontos button').forEach(function (b, i) {
+      if (i === atual) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current');
+    });
+  }
+
   /* ---- Faixa de status de vagas ---- */
   function renderVagas() {
     const el = document.getElementById('faixa-vagas');
@@ -1109,6 +1210,21 @@
       const itens = listar(estado.conteudo, 'galeria').map(function (g) { return { img: g.imagem, legenda: g.legenda }; });
       abrirLightbox(itens, Number(alvo.dataset.indice) || 0);
     },
+    'filtrar-moradores': function (alvo) {
+      estado.filtroMoradores = alvo.dataset.filtro || 'todos';
+      renderMoradores();
+    },
+    'abrir-evento': function (alvo) {
+      const evento = estado.conteudo.eventos[alvo.dataset.id];
+      if (!evento) return;
+      abrirLightbox(evento.fotos.map(function (id) { return { img: id, legenda: evento.titulo }; }), Number(alvo.dataset.indice) || 0);
+    },
+    'evento-anterior': function (alvo) { moverFotoEvento(alvo, -1); },
+    'evento-proximo': function (alvo) { moverFotoEvento(alvo, 1); },
+    'evento-ir': function (alvo) {
+      const trilho = trilhoDoEvento(alvo);
+      if (trilho) trilho.scrollTo({ left: Number(alvo.dataset.indice) * trilho.clientWidth, behavior: 'smooth' });
+    },
     'lightbox-fechar': fecharLightbox,
     'lightbox-anterior': function () { navegarLightbox(-1); },
     'lightbox-proximo': function () { navegarLightbox(1); }
@@ -1163,6 +1279,9 @@
     ligarNavegacao();
     ligarCarrossel();
     ligarLightbox();
+    document.addEventListener('scroll', function (ev) {
+      if (ev.target.classList && ev.target.classList.contains('evento-fotos')) atualizarPontosEvento(ev.target);
+    }, true);
     store = criarStoreLocal();
     await store.iniciar(function (c) {
       estado.conteudo = c;
