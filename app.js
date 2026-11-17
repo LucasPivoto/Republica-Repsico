@@ -699,7 +699,215 @@
   let store = null;
 
   function renderizarTudo() {
-    /* As seções são ligadas aqui nas próximas etapas. */
+    if (observadorImagens) observadorImagens.disconnect();
+    renderHero();
+    renderVagas();
+    hidratarImagens(document);
+  }
+
+  /* ---- Fotos sob demanda (lazy) com cache em memória ---- */
+  const imagensProntas = new Map();
+  const imagensPedidas = new Map();
+  let observadorImagens = null;
+
+  function obterImagem(id) {
+    if (imagensProntas.has(id)) return Promise.resolve(imagensProntas.get(id));
+    if (!imagensPedidas.has(id)) {
+      const pedido = Promise.resolve(store ? store.lerImagem(id) : null).then(function (url) {
+        imagensPedidas.delete(id);
+        if (url) imagensProntas.set(id, url);
+        return url;
+      }, function () {
+        imagensPedidas.delete(id);
+        return null;
+      });
+      imagensPedidas.set(id, pedido);
+    }
+    return imagensPedidas.get(id);
+  }
+
+  function carregarImagem(img) {
+    const id = img.dataset.img;
+    obterImagem(id).then(function (url) {
+      if (img.dataset.img !== id) return;
+      if (url) { img.src = url; img.classList.add('carregada'); } else { img.classList.add('sem-imagem'); }
+    });
+  }
+
+  function hidratarImagens(raiz) {
+    (raiz || document).querySelectorAll('img[data-img]').forEach(function (img) {
+      if (img.getAttribute('src')) return;
+      const pronta = imagensProntas.get(img.dataset.img);
+      if (pronta) { img.src = pronta; img.classList.add('carregada'); return; }
+      if (!('IntersectionObserver' in window)) { carregarImagem(img); return; }
+      observadorImagens = observadorImagens || new IntersectionObserver(function (entradas) {
+        entradas.forEach(function (e) {
+          if (!e.isIntersecting) return;
+          observadorImagens.unobserve(e.target);
+          carregarImagem(e.target);
+        });
+      }, { rootMargin: '200px' });
+      observadorImagens.observe(img);
+    });
+  }
+
+  function imgTag(id, alt, classe) {
+    return '<img data-img="' + escapeHtml(id) + '" alt="' + escapeHtml(alt || '') + '" draggable="false" decoding="async"' +
+      (classe ? ' class="' + classe + '"' : '') + '>';
+  }
+
+  function placeholderMarca(destaque) {
+    return '<div class="placeholder-marca">' + (destaque
+      ? '<span class="destaque">' + escapeHtml(destaque) + '</span><img class="selo-logo" src="logo-repsico.png" alt="">'
+      : '<img class="logo-grande" src="logo-repsico.png" alt="">') + '</div>';
+  }
+
+  /* ---- Carrossel (vitrine estilo Steam) ---- */
+  const carrossel = { indice: 0, total: 0, timer: null, mouseDentro: false, focoDentro: false, inicioX: null, inicioY: 0 };
+  const prefereMenosMovimento = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  function slidesVisiveis() {
+    const c = estado.conteudo;
+    return listar(c, 'slides').filter(function (s) {
+      return estado.admin || !(s.somenteComVagas && !c.config.vagasAbertas);
+    });
+  }
+
+  function htmlSlide(s, i, lista) {
+    const oculto = s.somenteComVagas && !estado.conteudo.config.vagasAbertas;
+    const link = linkSeguro(s.botaoLink);
+    const externo = !!link && /^https?:/i.test(link);
+    return '<article class="hero-slide" data-indice="' + i + '" aria-roledescription="slide" aria-label="' +
+        (i + 1) + ' de ' + lista.length + '">' +
+      '<div class="hero-midia">' + (s.imagem ? imgTag(s.imagem, s.titulo) : placeholderMarca(s.destaque)) + '</div>' +
+      '<div class="hero-painel">' +
+        (s.tag ? '<span class="tag">' + escapeHtml(s.tag) + '</span>' : '') +
+        '<h2 class="hero-titulo">' + escapeHtml(s.titulo) + '</h2>' +
+        (s.descricao ? '<p class="hero-descricao">' + escapeHtml(s.descricao) + '</p>' : '') +
+        (s.botaoTexto && link ? '<a class="btn btn-primario btn-hero" href="' + escapeHtml(link) + '"' +
+          (externo ? ' target="_blank" rel="noopener"' : '') + '>' + escapeHtml(s.botaoTexto) + icone('seta-dir') + '</a>' : '') +
+        (estado.admin && oculto ? '<span class="marcador-oculto">oculto: casa completa</span>' : '') +
+      '</div>' +
+    '</article>';
+  }
+
+  function renderHero() {
+    const raiz = document.querySelector('#home .hero');
+    const slides = slidesVisiveis();
+    carrossel.total = slides.length;
+    if (carrossel.indice >= slides.length) carrossel.indice = 0;
+    if (!slides.length) {
+      pararAutoplay();
+      raiz.innerHTML = '<div class="hero-vazio"><img src="logo-repsico.png" alt=""><div><strong>República REPSICO</strong><span>' +
+        escapeHtml(estado.conteudo.config.textos.chamada) + '</span></div></div>';
+      return;
+    }
+    const varios = slides.length > 1;
+    raiz.innerHTML =
+      '<div class="hero-palco">' +
+        '<div class="hero-trilho">' + slides.map(htmlSlide).join('') + '</div>' +
+        (varios ? '<div class="hero-setas">' +
+          '<button type="button" class="hero-seta" data-acao="slide-anterior" aria-label="Slide anterior">' + icone('seta-esq') + '</button>' +
+          '<button type="button" class="hero-seta" data-acao="slide-proximo" aria-label="Próximo slide">' + icone('seta-dir') + '</button>' +
+        '</div>' : '') +
+      '</div>' +
+      (varios ? '<div class="hero-indicadores" role="group" aria-label="Escolher slide">' + slides.map(function (s, i) {
+        return '<button type="button" data-acao="ir-slide" data-indice="' + i + '" aria-label="Slide ' + (i + 1) + ': ' +
+          escapeHtml(s.titulo) + '"></button>';
+      }).join('') + '</div>' : '');
+    mostrarSlide(carrossel.indice);
+    agendarAutoplay();
+  }
+
+  function mostrarSlide(i) {
+    const slides = document.querySelectorAll('#home .hero-slide');
+    if (!slides.length) return;
+    carrossel.indice = ((i % slides.length) + slides.length) % slides.length;
+    slides.forEach(function (el, k) {
+      const ativo = k === carrossel.indice;
+      el.classList.toggle('ativo', ativo);
+      el.setAttribute('aria-hidden', String(!ativo));
+      el.inert = !ativo;
+    });
+    document.querySelectorAll('#home .hero-indicadores button').forEach(function (b, k) {
+      if (k === carrossel.indice) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current');
+    });
+  }
+
+  function irParaSlide(i) {
+    mostrarSlide(i);
+    agendarAutoplay();
+  }
+
+  function pararAutoplay() {
+    clearTimeout(carrossel.timer);
+    carrossel.timer = null;
+  }
+
+  function agendarAutoplay() {
+    pararAutoplay();
+    if (carrossel.total < 2 || carrossel.mouseDentro || carrossel.focoDentro || document.hidden || prefereMenosMovimento.matches) return;
+    carrossel.timer = setTimeout(function () {
+      mostrarSlide(carrossel.indice + 1);
+      agendarAutoplay();
+    }, 6000);
+  }
+
+  function ligarCarrossel() {
+    const raiz = document.querySelector('#home .hero');
+    raiz.addEventListener('mouseenter', function () { carrossel.mouseDentro = true; agendarAutoplay(); });
+    raiz.addEventListener('mouseleave', function () { carrossel.mouseDentro = false; agendarAutoplay(); });
+    raiz.addEventListener('focusin', function () { carrossel.focoDentro = true; agendarAutoplay(); });
+    raiz.addEventListener('focusout', function (ev) {
+      if (raiz.contains(ev.relatedTarget)) return;
+      carrossel.focoDentro = false;
+      agendarAutoplay();
+    });
+    raiz.addEventListener('pointerdown', function (ev) {
+      if (!ev.isPrimary || ev.button !== 0 || ev.target.closest('button, a, input, .controles-item')) return;
+      carrossel.inicioX = ev.clientX;
+      carrossel.inicioY = ev.clientY;
+    });
+    raiz.addEventListener('pointerup', function (ev) {
+      if (carrossel.inicioX === null) return;
+      const dx = ev.clientX - carrossel.inicioX;
+      const dy = ev.clientY - carrossel.inicioY;
+      carrossel.inicioX = null;
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) irParaSlide(carrossel.indice + (dx < 0 ? 1 : -1));
+    });
+    raiz.addEventListener('pointercancel', function () { carrossel.inicioX = null; });
+    raiz.addEventListener('keydown', function (ev) {
+      if (ev.target.closest('input, textarea, select')) return;
+      if (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft') {
+        ev.preventDefault();
+        irParaSlide(carrossel.indice + (ev.key === 'ArrowRight' ? 1 : -1));
+      }
+    });
+    document.addEventListener('visibilitychange', agendarAutoplay);
+  }
+
+  /* ---- Faixa de status de vagas ---- */
+  function renderVagas() {
+    const el = document.getElementById('faixa-vagas');
+    const cfg = estado.conteudo.config;
+    const t = cfg.textos;
+    el.classList.toggle('aberta', cfg.vagasAbertas);
+    el.classList.toggle('completa', !cfg.vagasAbertas);
+    let acao;
+    if (cfg.vagasAbertas) {
+      const contato = listar(estado.conteudo, 'contatos')[0];
+      const link = contato ? waLink(contato.telefone, mensagemWhatsApp(contato)) : null;
+      acao = '<a class="btn btn-claro btn-whatsapp" href="' + escapeHtml(link || '#localizacao') + '"' +
+        (link ? ' target="_blank" rel="noopener"' : '') + '>' + icone('whatsapp') + 'Agendar visita no WhatsApp</a>';
+    } else {
+      acao = cfg.instagram ? '<a class="btn btn-secundario btn-instagram" href="https://instagram.com/' +
+        escapeHtml(cfg.instagram) + '" target="_blank" rel="noopener">' + icone('instagram') + '@' + escapeHtml(cfg.instagram) + '</a>' : '';
+    }
+    el.innerHTML = '<div class="container faixa-inner">' +
+      (cfg.vagasAbertas ? '<span class="pulso" aria-hidden="true"></span>' : '') +
+      '<div class="faixa-texto"><strong>' + escapeHtml(cfg.vagasAbertas ? t.vagasAbertasTitulo : t.casaCompletaTitulo) +
+      '</strong><span>' + escapeHtml(cfg.vagasAbertas ? t.vagasAbertasTexto : t.casaCompletaTexto) + '</span></div>' +
+      acao + '</div>';
   }
 
   /* ======================================================================
@@ -732,7 +940,10 @@
 
   const ACOES = {
     'alternar-tema': alternarTema,
-    menu: alternarMenu
+    menu: alternarMenu,
+    'slide-anterior': function () { irParaSlide(carrossel.indice - 1); },
+    'slide-proximo': function () { irParaSlide(carrossel.indice + 1); },
+    'ir-slide': function (alvo) { irParaSlide(Number(alvo.dataset.indice) || 0); }
   };
 
   document.addEventListener('click', function (ev) {
@@ -782,6 +993,7 @@
   async function iniciar() {
     preencherIcones();
     ligarNavegacao();
+    ligarCarrossel();
     store = criarStoreLocal();
     await store.iniciar(function (c) {
       estado.conteudo = c;

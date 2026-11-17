@@ -274,6 +274,148 @@ main { padding-top: var(--nav-h); }
   .secao { padding-block: 88px; }
 }
 
+/* ---------- 5b. Placeholder da marca (anéis concêntricos dos olhos da logo) ---------- */
+.placeholder-marca {
+  position: relative; display: grid; place-items: center; overflow: hidden;
+  width: 100%; height: 100%;
+  background:
+    repeating-radial-gradient(circle at 72% 38%, rgba(255, 255, 255, 0.13) 0 2px, transparent 2px 26px),
+    radial-gradient(circle at 30% 30%, #EF233C 0%, #D90429 45%, #7A0216 100%);
+  color: var(--branco);
+}
+.placeholder-marca .destaque {
+  position: relative; z-index: 1; padding: 0 16px; text-align: center;
+  font-family: var(--font-titulo); font-weight: 900; line-height: 0.95;
+  font-size: clamp(2.6rem, 1.6rem + 6vw, 5.6rem); letter-spacing: -0.02em;
+  text-shadow: 0 6px 30px rgba(0, 0, 0, 0.35);
+  overflow-wrap: anywhere;
+}
+.placeholder-marca .selo-logo {
+  position: absolute; right: 16px; bottom: 16px; width: 56px; height: 56px;
+  border-radius: 14px; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35);
+}
+.placeholder-marca .logo-grande { width: min(42%, 220px); border-radius: 24px; box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3); }
+
+/* ---------- 5c. Carrossel estilo vitrine Steam ---------- */
+.secao-hero { padding-block: 20px 8px; }
+.hero { position: relative; outline: none; }
+.hero:focus-visible { outline: 3px solid var(--accent-hover); outline-offset: 6px; border-radius: var(--raio); }
+
+.hero-palco { position: relative; }
+.hero-trilho { display: grid; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+
+.hero-slide {
+  grid-area: 1 / 1;
+  display: grid; grid-template-columns: minmax(0, 1fr);
+  border-radius: var(--raio); overflow: hidden;
+  background: #17171B; color: #F4F4F5;
+  box-shadow: 0 18px 48px rgba(18, 18, 20, 0.28);
+  opacity: 0; visibility: hidden;
+  transition: opacity 450ms ease, visibility 0s linear 450ms;
+}
+.hero-slide.ativo { opacity: 1; visibility: visible; transition: opacity 450ms ease, visibility 0s; }
+
+.hero-midia { position: relative; aspect-ratio: 16 / 10; overflow: hidden; background: #0E0E10; }
+.hero-midia img { width: 100%; height: 100%; object-fit: cover; -webkit-user-drag: none; }
+
+.hero-painel {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 12px;
+  padding: 20px 20px 24px; min-width: 0;
+  background: linear-gradient(160deg, #1F1F25 0%, #141417 100%);
+}
+.hero-painel .tag {
+  display: inline-block; padding: 4px 12px; border-radius: 6px;
+  background: var(--accent); color: var(--branco);
+  font-family: var(--font-titulo); font-weight: 900; font-size: 0.75rem; letter-spacing: 0.14em;
+}
+.hero-titulo { margin: 0; font-size: clamp(1.45rem, 1.1rem + 1.6vw, 2.2rem); font-weight: 900; color: #FFFFFF; }
+.hero-descricao { margin: 0; color: #C9C9D1; font-size: 0.98rem; }
+.hero-painel .btn-hero { margin-top: 4px; }
+.marcador-oculto {
+  display: inline-block; padding: 3px 10px; border-radius: 999px;
+  background: #3A3A42; color: #FDE68A; font-size: 0.75rem; font-weight: 600;
+}
+
+.hero-setas {
+  position: absolute; left: 0; right: 0; top: 0; aspect-ratio: 16 / 10; z-index: 2;
+  display: flex; align-items: center; justify-content: space-between;
+  padding-inline: 8px; pointer-events: none;
+}
+.hero-seta {
+  pointer-events: auto; display: grid; place-items: center;
+  width: 40px; height: 64px; padding: 0; border: 0; border-radius: 10px;
+  background: rgba(18, 18, 20, 0.55); color: var(--branco);
+  transition: background-color var(--transicao);
+}
+.hero-seta:hover { background: var(--accent); }
+.hero-seta .icone { width: 26px; height: 26px; }
+
+.hero-indicadores { display: flex; justify-content: center; gap: 8px; margin-top: 16px; }
+.hero-indicadores button {
+  width: 26px; height: 8px; padding: 0; border: 0; border-radius: 4px;
+  background: var(--border); transition: background-color var(--transicao), width var(--transicao);
+}
+.hero-indicadores button:hover { background: var(--text-muted); }
+.hero-indicadores button[aria-current="true"] { background: var(--accent); width: 40px; }
+
+.hero-vazio {
+  display: flex; align-items: center; gap: 20px; padding: 28px;
+  border-radius: var(--raio); color: var(--branco);
+  background:
+    repeating-radial-gradient(circle at 85% 50%, rgba(255, 255, 255, 0.12) 0 2px, transparent 2px 26px),
+    linear-gradient(135deg, #D90429, #7A0216);
+}
+.hero-vazio img { width: 96px; height: 96px; border-radius: 20px; flex: none; }
+.hero-vazio strong { display: block; font-family: var(--font-titulo); font-weight: 900; font-size: 1.6rem; }
+
+@media (min-width: 900px) {
+  .secao-hero { padding-block: 32px 12px; }
+  .hero-slide { grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); min-height: 400px; }
+  .hero-midia { aspect-ratio: auto; min-height: 400px; }
+  .hero-painel { justify-content: center; padding: 36px 32px; gap: 16px; }
+  .hero-setas { inset: 0; aspect-ratio: auto; padding-inline: 10px; }
+  .hero-seta { width: 44px; height: 96px; }
+}
+
+@media (min-width: 1360px) {
+  .hero-setas { left: -64px; right: -64px; padding-inline: 0; }
+  .hero-seta { background: transparent; color: var(--text-muted); }
+  .hero-seta:hover { background: var(--accent-suave); color: var(--accent-text); }
+}
+
+/* ---------- 5d. Faixa de status de vagas ---------- */
+.faixa-vagas { margin-top: 20px; }
+.faixa-inner { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px; padding-block: 22px; }
+.faixa-texto { display: flex; flex-direction: column; flex: 1 1 260px; min-width: 0; }
+.faixa-texto strong {
+  font-family: var(--font-titulo); font-weight: 900; font-size: clamp(1.15rem, 1rem + 0.8vw, 1.5rem);
+  letter-spacing: 0.02em; overflow-wrap: anywhere;
+}
+.faixa-texto span { overflow-wrap: anywhere; }
+
+.faixa-vagas.aberta {
+  color: var(--branco);
+  background:
+    repeating-radial-gradient(circle at 96% 50%, rgba(255, 255, 255, 0.12) 0 2px, transparent 2px 24px),
+    linear-gradient(90deg, #B8001F, #D90429 55%, #EF233C);
+}
+.faixa-vagas.completa { background: var(--bg-card); border-block: 1px solid var(--border); }
+.faixa-vagas.completa .faixa-texto span { color: var(--text-muted); }
+
+.pulso {
+  position: relative; width: 14px; height: 14px; flex: none; border-radius: 50%; background: var(--branco);
+  margin-inline: 8px 2px;
+}
+.pulso::after {
+  content: ''; position: absolute; inset: -6px; border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  animation: pulsar 1.6s ease-out infinite;
+}
+@keyframes pulsar { from { transform: scale(0.6); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
+
+.btn-whatsapp .icone { color: #25D366; }
+.faixa-vagas.aberta .btn-whatsapp .icone { color: #1DA851; }
+
 /* ---------- 6. Rodapé ---------- */
 .rodape {
   background: var(--preto); color: #D4D4D8;
