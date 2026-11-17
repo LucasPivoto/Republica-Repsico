@@ -702,6 +702,7 @@
     if (observadorImagens) observadorImagens.disconnect();
     renderHero();
     renderVagas();
+    renderCasa();
     hidratarImagens(document);
   }
 
@@ -886,6 +887,81 @@
     document.addEventListener('visibilitychange', agendarAutoplay);
   }
 
+  /* ---- Seção A Casa ---- */
+  function renderCasa() {
+    const c = estado.conteudo;
+    const cfg = c.config;
+    const t = cfg.textos;
+    const f = cfg.funcionaria;
+
+    document.querySelector('#casa .sobre').innerHTML =
+      '<h2 class="secao-titulo">' + escapeHtml(t.sobreTitulo) + '</h2>' +
+      '<p class="secao-intro">' + escapeHtml(t.sobreTexto) + '</p>';
+
+    document.getElementById('lista-diferenciais').innerHTML = listar(c, 'diferenciais').map(function (d) {
+      return '<article class="card-casa card-diferencial">' +
+        '<span class="icone-bolha">' + icone(d.icone) + '</span>' +
+        '<h3>' + escapeHtml(d.titulo) + '</h3>' +
+        (d.texto ? '<p>' + escapeHtml(d.texto) + '</p>' : '') +
+      '</article>';
+    }).join('') +
+      '<article class="card-casa card-equipe">' +
+        '<span class="icone-bolha">' + icone('chef') + '</span>' +
+        '<span class="card-rotulo">Comodidade &amp; Equipe</span>' +
+        '<h3>' + escapeHtml(f.nome) + '</h3>' +
+        (f.descricao ? '<p>' + escapeHtml(f.descricao) + '</p>' : '') +
+        (f.refeicoes ? '<p class="refeicoes">' + icone('talheres') + '<span>' + escapeHtml(f.refeicoes) + '</span></p>' : '') +
+      '</article>';
+
+    document.getElementById('card-financeiro').innerHTML =
+      '<div class="financeiro-valor">' +
+        '<span class="financeiro-rotulo">Transparência financeira</span>' +
+        '<strong class="valor">' + escapeHtml(formatarMoeda(cfg.valorMensal)) + '</strong>' +
+        '<span class="financeiro-sub">por mês · valor médio · tudo incluso</span>' +
+      '</div>' +
+      '<ul class="lista-check">' + cfg.itensInclusos.map(function (item) {
+        return '<li>' + icone('check') + '<span>' + escapeHtml(item) + '</span></li>';
+      }).join('') + '</ul>';
+
+    renderGaleria();
+    renderMascotes();
+  }
+
+  function renderGaleria() {
+    const fotos = listar(estado.conteudo, 'galeria');
+    document.getElementById('galeria').hidden = !fotos.length && !estado.admin;
+    document.getElementById('lista-galeria').innerHTML = fotos.length ? fotos.map(function (g, i) {
+      return '<figure class="galeria-item">' +
+        '<button type="button" class="galeria-abrir" data-acao="abrir-galeria" data-indice="' + i + '" aria-label="Ampliar foto' +
+          (g.legenda ? ': ' + escapeHtml(g.legenda) : ' ' + (i + 1)) + '">' + imgTag(g.imagem, g.legenda || 'Foto da casa') + '</button>' +
+        (g.legenda ? '<figcaption>' + escapeHtml(g.legenda) + '</figcaption>' : '') +
+      '</figure>';
+    }).join('') : '<p class="vazio">Nenhuma foto ainda. Use “+ Adicionar fotos” para mostrar os ambientes da casa.</p>';
+  }
+
+  function renderMascotes() {
+    const t = estado.conteudo.config.textos;
+    const lista = listar(estado.conteudo, 'mascotes');
+    const el = document.getElementById('mascotes');
+    el.hidden = !lista.length && !estado.admin;
+    el.innerHTML =
+      '<div class="mascotes-card">' +
+        '<div class="mascotes-cabecalho">' +
+          '<span class="mascotes-selo">' + icone('pata') + 'Mascotes oficiais</span>' +
+          '<h3>' + escapeHtml(t.mascotesTitulo) + '</h3>' +
+          '<p class="mascotes-subtitulo">' + escapeHtml(t.mascotesSubtitulo) + '</p>' +
+          '<div class="acoes-secao" data-secao="mascotes"></div>' +
+        '</div>' +
+        '<div class="mascotes-lista">' + lista.map(function (m) {
+          return '<article class="mascote">' +
+            '<div class="mascote-foto">' + (m.foto ? imgTag(m.foto, m.nome) : '<div class="placeholder-pata">' + icone('pata') + '</div>') + '</div>' +
+            '<div class="mascote-texto"><h4 class="mascote-nome">' + escapeHtml(m.nome) + '</h4>' +
+              (m.descricao ? '<p class="mascote-descricao">' + escapeHtml(m.descricao) + '</p>' : '') + '</div>' +
+          '</article>';
+        }).join('') + '</div>' +
+      '</div>';
+  }
+
   /* ---- Faixa de status de vagas ---- */
   function renderVagas() {
     const el = document.getElementById('faixa-vagas');
@@ -921,6 +997,91 @@
     try { localStorage.setItem('repsico:tema', novo); } catch (e) { /* armazenamento indisponível */ }
   }
 
+  /* ---- Lightbox (galeria e rolês) ---- */
+  const lightbox = { itens: [], indice: 0, origem: null, inicioX: null };
+
+  function abrirLightbox(itens, indice) {
+    if (!itens.length) return;
+    lightbox.itens = itens;
+    lightbox.indice = indice || 0;
+    lightbox.origem = document.activeElement;
+    const el = document.getElementById('lightbox');
+    const varios = itens.length > 1;
+    el.innerHTML =
+      '<div class="lightbox-fundo" data-acao="lightbox-fechar"></div>' +
+      '<figure class="lightbox-conteudo" role="dialog" aria-modal="true" aria-label="Foto ampliada">' +
+        '<img class="lightbox-img" alt="" draggable="false">' +
+        '<figcaption><span class="lightbox-legenda"></span><span class="lightbox-contador"></span></figcaption>' +
+      '</figure>' +
+      '<button type="button" class="lightbox-btn lightbox-fechar" data-acao="lightbox-fechar" aria-label="Fechar foto">' + icone('fechar') + '</button>' +
+      (varios ? '<button type="button" class="lightbox-btn lightbox-anterior" data-acao="lightbox-anterior" aria-label="Foto anterior">' + icone('seta-esq') + '</button>' +
+        '<button type="button" class="lightbox-btn lightbox-proximo" data-acao="lightbox-proximo" aria-label="Próxima foto">' + icone('seta-dir') + '</button>' : '');
+    el.hidden = false;
+    document.documentElement.classList.add('sem-rolagem');
+    mostrarFotoLightbox();
+    el.querySelector('.lightbox-fechar').focus();
+  }
+
+  function mostrarFotoLightbox() {
+    const total = lightbox.itens.length;
+    lightbox.indice = ((lightbox.indice % total) + total) % total;
+    const item = lightbox.itens[lightbox.indice];
+    const el = document.getElementById('lightbox');
+    const img = el.querySelector('.lightbox-img');
+    img.removeAttribute('src');
+    img.alt = item.legenda || 'Foto ampliada';
+    obterImagem(item.img).then(function (url) {
+      if (url && lightbox.itens[lightbox.indice] === item) img.src = url;
+    });
+    el.querySelector('.lightbox-legenda').textContent = item.legenda || '';
+    el.querySelector('.lightbox-contador').textContent = (lightbox.indice + 1) + ' / ' + total;
+  }
+
+  function navegarLightbox(passo) {
+    lightbox.indice += passo;
+    mostrarFotoLightbox();
+  }
+
+  function fecharLightbox() {
+    const el = document.getElementById('lightbox');
+    if (el.hidden) return;
+    el.hidden = true;
+    el.innerHTML = '';
+    document.documentElement.classList.remove('sem-rolagem');
+    if (lightbox.origem && document.contains(lightbox.origem)) lightbox.origem.focus();
+  }
+
+  function ligarLightbox() {
+    const el = document.getElementById('lightbox');
+    document.addEventListener('keydown', function (ev) {
+      if (el.hidden) return;
+      if (ev.key === 'Escape') { ev.preventDefault(); fecharLightbox(); }
+      else if (ev.key === 'ArrowRight') { ev.preventDefault(); navegarLightbox(1); }
+      else if (ev.key === 'ArrowLeft') { ev.preventDefault(); navegarLightbox(-1); }
+      else if (ev.key === 'Tab') prenderFoco(el, ev);
+    });
+    el.addEventListener('pointerdown', function (ev) { lightbox.inicioX = ev.clientX; });
+    el.addEventListener('pointerup', function (ev) {
+      if (lightbox.inicioX === null || lightbox.itens.length < 2) return;
+      const dx = ev.clientX - lightbox.inicioX;
+      lightbox.inicioX = null;
+      if (Math.abs(dx) > 50) navegarLightbox(dx < 0 ? 1 : -1);
+    });
+  }
+
+  // Mantém o Tab circulando entre os elementos focáveis de um diálogo.
+  function prenderFoco(container, ev) {
+    const focaveis = Array.from(container.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])'
+    )).filter(function (e) { return e.offsetParent !== null || e === document.activeElement; });
+    if (!focaveis.length) return;
+    const primeiro = focaveis[0];
+    const ultimo = focaveis[focaveis.length - 1];
+    if (!container.contains(document.activeElement)) { ev.preventDefault(); primeiro.focus(); }
+    else if (ev.shiftKey && document.activeElement === primeiro) { ev.preventDefault(); ultimo.focus(); }
+    else if (!ev.shiftKey && document.activeElement === ultimo) { ev.preventDefault(); primeiro.focus(); }
+  }
+
   function definirMenu(aberto) {
     const navbar = document.querySelector('.navbar');
     const botao = document.querySelector('[data-acao="menu"]');
@@ -943,7 +1104,14 @@
     menu: alternarMenu,
     'slide-anterior': function () { irParaSlide(carrossel.indice - 1); },
     'slide-proximo': function () { irParaSlide(carrossel.indice + 1); },
-    'ir-slide': function (alvo) { irParaSlide(Number(alvo.dataset.indice) || 0); }
+    'ir-slide': function (alvo) { irParaSlide(Number(alvo.dataset.indice) || 0); },
+    'abrir-galeria': function (alvo) {
+      const itens = listar(estado.conteudo, 'galeria').map(function (g) { return { img: g.imagem, legenda: g.legenda }; });
+      abrirLightbox(itens, Number(alvo.dataset.indice) || 0);
+    },
+    'lightbox-fechar': fecharLightbox,
+    'lightbox-anterior': function () { navegarLightbox(-1); },
+    'lightbox-proximo': function () { navegarLightbox(1); }
   };
 
   document.addEventListener('click', function (ev) {
@@ -994,6 +1162,7 @@
     preencherIcones();
     ligarNavegacao();
     ligarCarrossel();
+    ligarLightbox();
     store = criarStoreLocal();
     await store.iniciar(function (c) {
       estado.conteudo = c;
