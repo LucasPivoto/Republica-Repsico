@@ -515,6 +515,194 @@
   }
 
   /* ======================================================================
+     6. ARMAZENAMENTO
+     Interface comum (store): modo, iniciar(aoMudar), obter(), salvarItem,
+     excluirItem, salvarConfig, reordenar, salvarImagem, lerImagem,
+     excluirImagem, substituirTudo e auth { entrar, sair, logado, aoMudar,
+     trocarSenha }.
+     ====================================================================== */
+
+  const CHAVE_CONTEUDO = 'repsico:conteudo';
+  const CHAVE_SESSAO = 'repsico:sessao';
+  const CHAVE_SENHA = 'repsico:senhaLocal';
+  const CHAVE_CACHE = 'repsico:cache';
+
+  function erroCom(codigo, mensagem) {
+    const e = new Error(mensagem || codigo);
+    e.codigo = codigo;
+    return e;
+  }
+
+  function ehErroDeCota(e) {
+    return !!e && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22);
+  }
+
+  function lerLocal(chave) {
+    try { return localStorage.getItem(chave); } catch (e) { return null; }
+  }
+
+  function gravarLocal(chave, valor) {
+    try { localStorage.setItem(chave, valor); } catch (e) { throw ehErroDeCota(e) ? erroCom('cota') : e; }
+  }
+
+  function removerLocal(chave) {
+    try { localStorage.removeItem(chave); } catch (e) { /* ignora */ }
+  }
+
+  function validarAlvo(colecao, id) {
+    if (COLECOES.indexOf(colecao) < 0 || !/^[A-Za-z0-9_-]+$/.test(String(id))) throw erroCom('invalido');
+  }
+
+  function ehDataUrlImagem(v) {
+    return typeof v === 'string' && v.indexOf('data:image/') === 0;
+  }
+
+  // Fotos do modo local ficam no IndexedDB (o localStorage só aguenta ~5 MB).
+  function criarBancoImagens() {
+    let banco = null;
+    function abrir() {
+      return new Promise(function (ok, falha) {
+        if (!window.indexedDB) return falha(erroCom('sem-indexeddb'));
+        const req = indexedDB.open('repsico', 1);
+        req.onupgradeneeded = function () { req.result.createObjectStore('imagens'); };
+        req.onsuccess = function () { ok(req.result); };
+        req.onerror = function () { falha(req.error); };
+      });
+    }
+    function usar(modo, operacao) {
+      banco = banco || abrir();
+      return banco.then(function (db) {
+        return new Promise(function (ok, falha) {
+          const tx = db.transaction('imagens', modo);
+          const req = operacao(tx.objectStore('imagens'));
+          tx.oncomplete = function () { ok(req.result); };
+          tx.onerror = tx.onabort = function () { falha(ehErroDeCota(tx.error) ? erroCom('cota') : tx.error); };
+        });
+      });
+    }
+    return {
+      ler: function (id) { return usar('readonly', function (st) { return st.get(id); }).then(function (v) { return v === undefined ? null : v; }); },
+      gravar: function (id, valor) { return usar('readwrite', function (st) { return st.put(valor, id); }); },
+      excluir: function (id) { return usar('readwrite', function (st) { return st.delete(id); }); }
+    };
+  }
+
+  function criarStoreLocal() {
+    const imagens = criarBancoImagens();
+    const ouvintesAuth = [];
+    let conteudo = carregar();
+    let aoMudar = function () {};
+
+    function carregar() {
+      const bruto = lerLocal(CHAVE_CONTEUDO);
+      if (!bruto) return normalizar(null);
+      try { return normalizar(JSON.parse(bruto)); } catch (e) { return normalizar(null); }
+    }
+
+    // Grava primeiro; só troca o conteúdo em memória se a gravação deu certo.
+    function persistir(novo) {
+      gravarLocal(CHAVE_CONTEUDO, JSON.stringify(novo));
+      conteudo = novo;
+      aoMudar(conteudo);
+    }
+
+    async function alterar(mudanca) {
+      const copia = clonar(conteudo);
+      mudanca(copia);
+      persistir(normalizar(copia));
+    }
+
+    function notificarAuth(logado) {
+      ouvintesAuth.forEach(function (cb) { cb(logado); });
+    }
+
+    const auth = {
+      entrar: async function (senha) {
+        const hash = await sha256Hex(String(senha || ''));
+        if (hash !== (lerLocal(CHAVE_SENHA) || SENHA_LOCAL_HASH)) throw erroCom('senha-incorreta');
+        gravarLocal(CHAVE_SESSAO, '1');
+        notificarAuth(true);
+      },
+      sair: async function () {
+        removerLocal(CHAVE_SESSAO);
+        notificarAuth(false);
+      },
+      logado: function () { return lerLocal(CHAVE_SESSAO) === '1'; },
+      aoMudar: function (cb) { ouvintesAuth.push(cb); },
+      trocarSenha: async function (nova) {
+        if (String(nova || '').length < 6) throw erroCom('senha-fraca');
+        if (!auth.logado()) throw erroCom('permission-denied');
+        gravarLocal(CHAVE_SENHA, await sha256Hex(String(nova)));
+      }
+    };
+
+    return {
+      modo: 'local',
+      auth: auth,
+      iniciar: async function (cb) {
+        aoMudar = cb || function () {};
+        aoMudar(conteudo);
+      },
+      obter: function () { return conteudo; },
+      salvarItem: async function (colecao, id, dados) {
+        validarAlvo(colecao, id);
+        await alterar(function (c) { c[colecao][id] = clonar(dados); });
+      },
+      excluirItem: async function (colecao, id) {
+        validarAlvo(colecao, id);
+        await alterar(function (c) { delete c[colecao][id]; });
+      },
+      salvarConfig: async function (parcial) {
+        await alterar(function (c) {
+          Object.keys(parcial || {}).forEach(function (k) { c.config[k] = clonar(parcial[k]); });
+        });
+      },
+      reordenar: async function (colecao, pares) {
+        await alterar(function (c) {
+          (pares || []).forEach(function (par) {
+            if (c[colecao] && c[colecao][par[0]]) c[colecao][par[0]].ordem = par[1];
+          });
+        });
+      },
+      salvarImagem: async function (dataUrl) {
+        if (!ehDataUrlImagem(dataUrl)) throw erroCom('formato-imagem');
+        const id = gerarId();
+        await imagens.gravar(id, dataUrl);
+        return id;
+      },
+      lerImagem: function (id) {
+        return imagens.ler(id).catch(function (e) { console.warn('Imagem indisponível:', id, e); return null; });
+      },
+      excluirImagem: function (id) { return imagens.excluir(id); },
+      substituirTudo: async function (novoConteudo, mapaImagens, aoProgresso) {
+        const novo = normalizar(novoConteudo);
+        const antigas = coletarIdsImagens(conteudo);
+        const ids = Object.keys(mapaImagens || {}).filter(function (id) {
+          return /^[A-Za-z0-9_-]+$/.test(id) && ehDataUrlImagem(mapaImagens[id]);
+        });
+        for (let i = 0; i < ids.length; i++) {
+          await imagens.gravar(ids[i], mapaImagens[ids[i]]);
+          if (aoProgresso) aoProgresso(i + 1, ids.length);
+        }
+        persistir(novo);
+        const usadas = new Set(coletarIdsImagens(novo));
+        for (const id of antigas) if (!usadas.has(id)) await imagens.excluir(id);
+      }
+    };
+  }
+
+  /* ======================================================================
+     7. RENDERIZAÇÃO
+     ====================================================================== */
+
+  const estado = { conteudo: normalizar(null), admin: false, filtroMoradores: 'todos' };
+  let store = null;
+
+  function renderizarTudo() {
+    /* As seções são ligadas aqui nas próximas etapas. */
+  }
+
+  /* ======================================================================
      8. COMPONENTES — tema e menu
      ====================================================================== */
 
@@ -570,8 +758,14 @@
       coletarIdsImagens: coletarIdsImagens, gerarTextoDivulgacao: gerarTextoDivulgacao,
       COLECOES: COLECOES, CATEGORIAS: CATEGORIAS, ICONE_EMOJI: ICONE_EMOJI
     },
-    get CONTEUDO_INICIAL() { return clonar(CONTEUDO_INICIAL); }
+    get CONTEUDO_INICIAL() { return clonar(CONTEUDO_INICIAL); },
+    get store() { return store; },
+    get estado() { return estado; }
   };
+
+  function atualizarModoAdmin(logado) {
+    estado.admin = !!logado;
+  }
 
   function ligarNavegacao() {
     document.querySelector('.nav-links').addEventListener('click', function (ev) {
@@ -588,6 +782,13 @@
   async function iniciar() {
     preencherIcones();
     ligarNavegacao();
+    store = criarStoreLocal();
+    await store.iniciar(function (c) {
+      estado.conteudo = c;
+      renderizarTudo();
+    });
+    store.auth.aoMudar(atualizarModoAdmin);
+    atualizarModoAdmin(store.auth.logado());
   }
 
   iniciar()
