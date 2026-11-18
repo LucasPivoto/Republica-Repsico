@@ -326,8 +326,8 @@
       z2: { nome: 'Mingau', descricao: 'Especialista em sonecas, mestre em ganhar carinho de visita e dono do melhor lugar do sofá.', foto: null, ordem: 2 }
     },
     moradores: {
-      pantufa: { apelido: 'Pantufa', nome: 'Thiago', curso: '', anoEntrada: null, time: '', categoria: 'morador', instagram: '', foto: null },
-      dodo: { apelido: 'Dodô', nome: 'Lucas', curso: '', anoEntrada: null, time: '', categoria: 'morador', instagram: '', foto: null }
+      pantufa: { apelido: 'Pantufa', nome: 'Thiago', curso: '', anoEntrada: null, time: '', categoria: 'morador', instagram: '', foto: null, lema: '', caracteristicas: [] },
+      dodo: { apelido: 'Dodô', nome: 'Lucas', curso: '', anoEntrada: null, time: '', categoria: 'morador', instagram: '', foto: null, lema: '', caracteristicas: [] }
     },
     eventos: {
       e1: {
@@ -384,7 +384,7 @@
     diferenciais: { icone: 'estrela', titulo: '', texto: '' },
     galeria: { imagem: null, legenda: '' },
     mascotes: { nome: '', descricao: '', foto: null },
-    moradores: { apelido: '', nome: '', curso: '', anoEntrada: null, time: '', categoria: 'morador', instagram: '', foto: null },
+    moradores: { apelido: '', nome: '', curso: '', anoEntrada: null, time: '', categoria: 'morador', instagram: '', foto: null, lema: '', caracteristicas: [] },
     eventos: { titulo: '', descricao: '', fotos: [] },
     contatos: { nome: '', apelido: '', telefone: '' },
     faq: { pergunta: '', resposta: '' }
@@ -408,6 +408,13 @@
       const ano = parseInt(item.anoEntrada, 10);
       item.anoEntrada = Number.isFinite(ano) ? ano : null;
       item.instagram = normalizarInstagram(item.instagram);
+      item.lema = String(item.lema || '').trim();
+      item.caracteristicas = (Array.isArray(item.caracteristicas) ? item.caracteristicas : [])
+        .map(function (c) {
+          return { nome: String((c && c.nome) || '').trim(), estrelas: Math.min(5, Math.max(1, parseInt(c && c.estrelas, 10) || 1)) };
+        })
+        .filter(function (c) { return c.nome; })
+        .slice(0, 3);
     } else {
       const ordem = Number(item.ordem);
       item.ordem = Number.isFinite(ordem) && item.ordem !== null && item.ordem !== '' ? ordem : indice + 1;
@@ -1295,6 +1302,8 @@
     const cores = m.time ? coresTime(m.time) : null;
     const curso = [m.curso, m.anoEntrada ? 'desde ' + m.anoEntrada : ''].filter(Boolean).join(' · ');
     return '<article class="card-morador">' +
+      '<button type="button" class="morador-abrir" data-acao="abrir-ficha" data-id="' + escapeHtml(m.id) +
+        '" aria-label="Ver ficha de ' + escapeHtml(m.apelido) + '"></button>' +
       '<div class="morador-foto">' +
         (m.foto ? imgTag(m.foto, 'Foto de ' + m.apelido) : '<div class="placeholder-iniciais" aria-hidden="true">' + escapeHtml(iniciais(m.apelido)) + '</div>') +
         '<span class="badge-categoria categoria-' + m.categoria + '">' + CATEGORIAS[m.categoria] + '</span>' +
@@ -1312,6 +1321,60 @@
       '</div>' +
       controlesItem('moradores', m.id, false) +
     '</article>';
+  }
+
+  /* ---- Ficha do morador (janela sobreposta) ---- */
+  function htmlEstrelas(n) {
+    let estrelas = '';
+    // Cheia ★ e vazia ☆: a forma diferencia mesmo sem cor (alto contraste do sistema).
+    for (let i = 1; i <= 5; i++) estrelas += i <= n ? '<span class="cheia">★</span>' : '<span class="vazia">☆</span>';
+    return '<span class="estrelas" role="img" aria-label="' + n + ' de 5 estrelas">' + estrelas + '</span>';
+  }
+
+  function abrirFicha(id, origem) {
+    const m = estado.conteudo.moradores[id];
+    if (!m) return;
+    const el = document.getElementById('modal-ficha');
+    const cores = m.time ? coresTime(m.time) : null;
+    const sub = [m.nome, m.curso].filter(Boolean).join(' · ');
+    const selos = '<span class="badge-categoria categoria-' + m.categoria + '">' + CATEGORIAS[m.categoria] + '</span>' +
+      (m.time ? '<span class="badge-time' + (cores ? '' : ' neutro') + '"' +
+        (cores ? ' style="background:' + cores[0] + ';color:' + cores[1] + '"' : '') + '>' + icone('bola') + escapeHtml(m.time) + '</span>' : '') +
+      (m.instagram ? '<a class="btn-instagram" href="https://instagram.com/' + escapeHtml(m.instagram) + '" target="_blank" rel="noopener">' +
+        icone('instagram') + '@' + escapeHtml(m.instagram) + '</a>' : '');
+    const tabela = m.caracteristicas.length
+      ? '<table class="ficha-tabela"><thead><tr><th scope="col">Características</th><th scope="col">Nível</th></tr></thead><tbody>' +
+        m.caracteristicas.map(function (c) {
+          return '<tr><td>' + escapeHtml(c.nome) + '</td><td>' + htmlEstrelas(c.estrelas) + '</td></tr>';
+        }).join('') + '</tbody></table>'
+      : '';
+    el.innerHTML =
+      '<div class="modal-fundo" data-acao="fechar-modal"></div>' +
+      '<div class="modal-caixa ficha" role="dialog" aria-modal="true" aria-labelledby="titulo-ficha">' +
+        '<div class="ficha-topo"><img src="logo-repsico.png" alt="" width="36" height="36">' +
+          '<h2 id="titulo-ficha">REPSICO · Ficha do morador</h2>' +
+          '<button type="button" class="btn-icone" data-acao="fechar-modal" aria-label="Fechar ficha">' + icone('fechar') + '</button></div>' +
+        '<div class="ficha-corpo">' +
+          '<div class="ficha-foto">' + (m.foto ? imgTag(m.foto, 'Foto de ' + m.apelido)
+            : '<div class="placeholder-iniciais" aria-hidden="true">' + escapeHtml(iniciais(m.apelido)) + '</div>') + '</div>' +
+          '<div class="ficha-dados">' +
+            '<div class="ficha-cabecalho">' +
+              '<p class="ficha-campo"><span class="ficha-rotulo">NOME:</span> <strong class="ficha-apelido">' + escapeHtml(m.apelido) + '</strong></p>' +
+              (m.anoEntrada ? '<p class="ficha-campo"><span class="ficha-rotulo">ANO:</span> <strong class="ficha-ano">' + m.anoEntrada + '</strong></p>' : '') +
+            '</div>' +
+            (sub ? '<p class="ficha-sub">' + escapeHtml(sub) + '</p>' : '') +
+            '<div class="ficha-selos">' + selos + '</div>' +
+            tabela +
+            (m.lema ? '<div class="ficha-lema-bloco"><p class="ficha-rotulo">LEMA DO MORADOR:</p>' +
+              '<blockquote class="ficha-lema">“' + escapeHtml(m.lema) + '”</blockquote></div>' : '') +
+            (estado.admin ? '<button type="button" class="btn btn-primario btn-pequeno ficha-editar" data-acao="editar-ficha" data-id="' +
+              escapeHtml(id) + '">' + icone('editar') + 'Editar</button>' : '') +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    abrirModal(el, origem);
+    hidratarImagens(el);
+    el.querySelector('.ficha-topo [data-acao="fechar-modal"]').focus();
   }
 
   /* ---- Eventos & Rolês ---- */
@@ -1747,7 +1810,41 @@
     hidratarImagens(raiz);
   }
 
+  const EXEMPLOS_CARACTERISTICAS = ['Ex.: Festas', 'Ex.: Cerveja', 'Ex.: Dormir'];
+
   const CAMPOS_ESPECIAIS = {
+    // Até 3 características, cada uma com 1 a 5 estrelas (rádios estilizados). Linha sem nome é ignorada.
+    caracteristicas: {
+      html: function (c, valores) {
+        const lista = lerCaminho(valores, c.nome) || [];
+        let linhas = '';
+        for (let i = 0; i < 3; i++) {
+          const item = lista[i] || { nome: '', estrelas: 3 };
+          linhas += '<div class="linha-caracteristica">' +
+            '<input type="text" name="caract-nome-' + i + '" value="' + escapeHtml(item.nome) + '" maxlength="40" placeholder="' +
+              EXEMPLOS_CARACTERISTICAS[i] + '" aria-label="Característica ' + (i + 1) + '">' +
+            '<span class="estrelas-entrada" role="radiogroup" aria-label="Nível da característica ' + (i + 1) + '">' +
+              [1, 2, 3, 4, 5].map(function (n) {
+                return '<label class="estrela-op"><input type="radio" name="caract-estrelas-' + i + '" value="' + n + '"' +
+                  (n === (item.estrelas || 3) ? ' checked' : '') + ' aria-label="' + n + (n === 1 ? ' estrela' : ' estrelas') + '">' +
+                  '<span aria-hidden="true"></span></label>';
+              }).join('') +
+            '</span></div>';
+        }
+        return '<div class="campo campo-caracteristicas"><span class="campo-rotulo">' + escapeHtml(c.rotulo) + '</span>' + linhas +
+          '<span class="campo-ajuda">Deixe o nome em branco para não mostrar a linha.</span></div>';
+      },
+      ligar: function () {},
+      valor: function (form) {
+        const lista = [];
+        for (let i = 0; i < 3; i++) {
+          const nome = form.elements.namedItem('caract-nome-' + i).value.trim();
+          const marcada = form.querySelector('[name="caract-estrelas-' + i + '"]:checked');
+          if (nome) lista.push({ nome: nome, estrelas: marcada ? Number(marcada.value) : 3 });
+        }
+        return lista;
+      }
+    },
     imagem: {
       html: function (c) {
         return '<div class="campo campo-imagem" data-campo-imagem="' + escapeHtml(c.nome) + '">' +
@@ -2196,6 +2293,8 @@
           validar: function (v) { return v !== null && (!Number.isInteger(v) || v < 1950 || v > ANO_ATUAL + 1) ? 'Ano inválido' : ''; } },
         { nome: 'time', rotulo: 'Time que torce', tipo: 'texto' },
         { nome: 'instagram', rotulo: 'Instagram', tipo: 'texto', placeholder: '@usuario' },
+        { nome: 'caracteristicas', rotulo: 'Características (até 3)', tipo: 'caracteristicas' },
+        { nome: 'lema', rotulo: 'Lema do morador', tipo: 'texto', placeholder: 'Ex.: Os melhores momentos são com um copo na mão' },
         { nome: 'foto', rotulo: 'Foto', tipo: 'imagem' }
       ],
       padrao: { categoria: 'morador' },
@@ -2504,6 +2603,11 @@
     'abrir-galeria': function (alvo) {
       const itens = listar(estado.conteudo, 'galeria').map(function (g) { return { img: g.imagem, legenda: g.legenda }; });
       abrirLightbox(itens, Number(alvo.dataset.indice) || 0);
+    },
+    'abrir-ficha': function (alvo) { abrirFicha(alvo.dataset.id, alvo); },
+    'editar-ficha': function (alvo) {
+      fecharModal(document.getElementById('modal-ficha'));
+      abrirFormularioColecao('moradores', alvo.dataset.id);
     },
     'filtrar-moradores': function (alvo) {
       estado.filtroMoradores = alvo.dataset.filtro || 'todos';
