@@ -18,18 +18,18 @@
   //    Enquanto estiver vazio, o site roda no MODO LOCAL: tudo funciona, mas as
   //    alterações ficam salvas só no navegador de quem editou.
   const firebaseConfig = {
-    apiKey: '',
-    authDomain: '',
-    projectId: '',
-    storageBucket: '',
-    messagingSenderId: '',
-    appId: ''
+    apiKey: 'AIzaSyAi-atDQk6aD3hitZCUz5Va7uoUQGvyUgU',
+    authDomain: 'site-repsico.firebaseapp.com',
+    projectId: 'site-repsico',
+    storageBucket: 'site-repsico.firebasestorage.app',
+    messagingSenderId: '907014860748',
+    appId: '1:907014860748:web:bbbbc29b5bb0ef06f13769'
   };
 
   // 2) E-mail do usuário único dos moradores (Firebase → Authentication → Users).
   //    Precisa ser o MESMO e-mail escrito nas regras do Firestore (veja o README).
   //    Recomendado: um e-mail que a casa controla (ex.: o Gmail da república).
-  const EMAIL_MORADORES = 'moradores@repsico.com';
+  const EMAIL_MORADORES = 'repsicounifei@gmail.com';
 
   // 3) Senha do MODO LOCAL (só vale enquanto o Firebase não estiver configurado).
   //    Padrão: "repsico". Guardada como hash SHA-256 — não use aqui a senha real da casa.

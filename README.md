@@ -57,7 +57,7 @@ A logo já está na raiz como `logo-repsico.png`. Para trocar, salve a nova imag
 4. **Ative o login:** vá em **Build → Authentication → Começar** e ative **E-mail/senha**.
 5. **Crie o usuário dos moradores:**
    1. Vá em **Authentication → Users → Adicionar usuário**.
-   2. Use o e-mail escrito em `EMAIL_MORADORES` no `app.js` (padrão `moradores@repsico.com`, veja o quadro abaixo).
+   2. Use o e-mail escrito em `EMAIL_MORADORES` no `app.js`: hoje é `repsicounifei@gmail.com`, o Gmail da república (veja o quadro abaixo).
    3. Defina a **senha da casa**, com no mínimo 6 caracteres.
 6. **(Recomendado) Feche o cadastro:** em **Authentication → Configurações → Ações do usuário**, desmarque **Ativar criação (inscrição)**. Assim ninguém cria conta própria.
 7. Envie o `app.js` atualizado para o GitHub. Pronto: o site passa a ler e gravar no Firebase. Na barra do morador aparece **Firebase** em vez de **Local**.
@@ -73,7 +73,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function ehMorador() {
       return request.auth != null
-          && request.auth.token.email == 'moradores@repsico.com';
+          && request.auth.token.email == 'repsicounifei@gmail.com';
     }
     match /site/{doc}     { allow read: if true; allow write: if ehMorador(); }
     match /imagens/{id}   { allow read: if true; allow write: if ehMorador(); }
@@ -82,11 +82,13 @@ service cloud.firestore {
 ```
 <!-- regras:fim -->
 
-> **Qual e-mail usar?** Prefira um e-mail que **a casa controla**, como o Gmail da república.
-> - Qualquer pessoa pode pedir "redefinir senha" para esse endereço. Se o domínio for de outra pessoa (por exemplo, se `repsico.com` não for de vocês), ela receberia o link.
-> - Se usarem outro e-mail, troque **em dois lugares**, sempre em letras minúsculas:
->   1. a constante `EMAIL_MORADORES` no topo do `app.js`;
->   2. a linha `request.auth.token.email == '...'` das regras.
+> **Por que o Gmail da república?** O login precisa usar um e-mail que **a casa controla**.
+> - Qualquer pessoa pode pedir "redefinir senha" para esse endereço, e o link chega na caixa de entrada dele. Com o Gmail da casa, só vocês recebem.
+> - Se um dia trocarem de e-mail:
+>   1. troque **em dois lugares**, sempre em letras minúsculas:
+>      - a constante `EMAIL_MORADORES` no topo do `app.js`;
+>      - a linha `request.auth.token.email == '...'` das regras;
+>   2. crie o usuário com o novo e-mail no Authentication.
 
 ## 5. Levar o que foi feito no modo local para o Firebase (backup)
 
