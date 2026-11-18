@@ -18,12 +18,12 @@
   //    Enquanto estiver vazio, o site roda no MODO LOCAL: tudo funciona, mas as
   //    alterações ficam salvas só no navegador de quem editou.
   const firebaseConfig = {
-    apiKey: '',
-    authDomain: '',
-    projectId: '',
-    storageBucket: '',
-    messagingSenderId: '',
-    appId: ''
+    apiKey: 'AIzaSyAi-atDQk6aD3hitZCUz5Va7uoUQGvyUgU',
+    authDomain: 'site-repsico.firebaseapp.com',
+    projectId: 'site-repsico',
+    storageBucket: 'site-repsico.firebasestorage.app',
+    messagingSenderId: '907014860748',
+    appId: '1:907014860748:web:bbbbc29b5bb0ef06f13769'
   };
 
   // 2) E-mail do usuário único dos moradores (Firebase → Authentication → Users).
