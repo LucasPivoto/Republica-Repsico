@@ -29,7 +29,7 @@
   // 2) E-mail do usuário único dos moradores (Firebase → Authentication → Users).
   //    Precisa ser o MESMO e-mail escrito nas regras do Firestore (veja o README).
   //    Recomendado: um e-mail que a casa controla (ex.: o Gmail da república).
-  const EMAIL_MORADORES = 'moradores@repsico.com';
+  const EMAIL_MORADORES = 'repsicounifei@gmail.com';
 
   // 3) Senha do MODO LOCAL (só vale enquanto o Firebase não estiver configurado).
   //    Padrão: "repsico". Guardada como hash SHA-256 — não use aqui a senha real da casa.
