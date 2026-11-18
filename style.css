@@ -649,17 +649,18 @@ img[data-img]:not(.carregada) { opacity: 0; }
 .ficha-sub { margin: 0; color: var(--text-muted); }
 .ficha-selos { display: flex; flex-wrap: wrap; gap: 6px; }
 .ficha-selos .badge-categoria { position: static; box-shadow: none; }
-.ficha-tabela { width: 100%; table-layout: fixed; border-collapse: collapse; border: 2px solid var(--text); }
+/* A coluna "Nível" tem a largura exata das 5 estrelas; a primeira coluna absorve o aperto (quebra o texto). */
+.ficha-tabela { width: 100%; table-layout: auto; border-collapse: collapse; border: 2px solid var(--text); }
 .ficha-tabela th {
-  padding: 8px 10px; border: 2px solid var(--text); text-align: left; overflow-wrap: normal;
+  padding: 8px 10px; border: 2px solid var(--text); text-align: left; overflow-wrap: anywhere;
   font-family: var(--font-titulo); font-weight: 800; font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase;
 }
-.ficha-tabela th:first-child { width: 58%; }
 .ficha-tabela td { padding: 8px 10px; border: 2px solid var(--text); vertical-align: middle; overflow-wrap: anywhere; }
+.ficha-tabela :is(th, td):last-child { width: 1%; white-space: nowrap; }
 .ficha-tabela td:first-child { font-family: var(--font-titulo); font-weight: 900; font-style: italic; color: var(--accent-text); }
-.estrelas { display: inline-flex; flex-wrap: nowrap; gap: 1px; font-size: 1.05rem; line-height: 1; }
+.estrelas { display: inline-flex; flex-wrap: nowrap; gap: 1px; font-size: min(1.05rem, 5vw); line-height: 1; }
 .estrelas .cheia { color: var(--accent); }
-.estrelas .vazia { color: var(--border); }
+.estrelas .vazia { color: var(--text-muted); }
 .ficha-lema-bloco { display: grid; gap: 4px; }
 .ficha-lema {
   margin: 0; font-family: var(--font-titulo); font-weight: 800; font-style: italic; font-size: 1.2rem; line-height: 1.3;
@@ -671,7 +672,7 @@ img[data-img]:not(.carregada) { opacity: 0; }
   .ficha-corpo { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr); gap: 28px; padding: 26px; }
   .ficha-foto { width: 100%; justify-self: stretch; align-self: start; }
   .ficha-tabela th { font-size: 0.8rem; letter-spacing: 0.08em; }
-  .estrelas { font-size: 1.3rem; }
+  .estrelas { font-size: min(1.3rem, 3.2vw); }
 }
 
 /* ---------- 5h. Eventos & Rolês ---------- */
@@ -1004,13 +1005,19 @@ body.is-admin .mascote { padding-top: 48px; }
 .estrelas-entrada { display: inline-flex; gap: 2px; }
 .estrela-op { position: relative; display: grid; place-items: center; width: 34px; height: 34px; cursor: pointer; }
 .estrela-op input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
-.estrela-op span { font-size: 1.6rem; line-height: 1; color: var(--border); transition: color var(--transicao); }
+.estrela-op span { font-size: 1.6rem; line-height: 1; color: var(--text-muted); transition: color var(--transicao); }
+.estrela-op span::before { content: '☆'; }
 .estrela-op input:focus-visible + span { outline: 3px solid var(--accent-hover); outline-offset: 2px; border-radius: 4px; }
 .estrelas-entrada:has(input[value="1"]:checked) .estrela-op:nth-child(-n+1) span,
 .estrelas-entrada:has(input[value="2"]:checked) .estrela-op:nth-child(-n+2) span,
 .estrelas-entrada:has(input[value="3"]:checked) .estrela-op:nth-child(-n+3) span,
 .estrelas-entrada:has(input[value="4"]:checked) .estrela-op:nth-child(-n+4) span,
 .estrelas-entrada:has(input[value="5"]:checked) .estrela-op:nth-child(-n+5) span { color: var(--accent); }
+.estrelas-entrada:has(input[value="1"]:checked) .estrela-op:nth-child(-n+1) span::before,
+.estrelas-entrada:has(input[value="2"]:checked) .estrela-op:nth-child(-n+2) span::before,
+.estrelas-entrada:has(input[value="3"]:checked) .estrela-op:nth-child(-n+3) span::before,
+.estrelas-entrada:has(input[value="4"]:checked) .estrela-op:nth-child(-n+4) span::before,
+.estrelas-entrada:has(input[value="5"]:checked) .estrela-op:nth-child(-n+5) span::before { content: '★'; }
 .texto-divulgacao {
   width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px;
   background: var(--bg); color: var(--text); font: 0.9rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical;

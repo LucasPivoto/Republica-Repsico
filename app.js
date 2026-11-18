@@ -1326,7 +1326,8 @@
   /* ---- Ficha do morador (janela sobreposta) ---- */
   function htmlEstrelas(n) {
     let estrelas = '';
-    for (let i = 1; i <= 5; i++) estrelas += '<span class="' + (i <= n ? 'cheia' : 'vazia') + '">★</span>';
+    // Cheia ★ e vazia ☆: a forma diferencia mesmo sem cor (alto contraste do sistema).
+    for (let i = 1; i <= 5; i++) estrelas += i <= n ? '<span class="cheia">★</span>' : '<span class="vazia">☆</span>';
     return '<span class="estrelas" role="img" aria-label="' + n + ' de 5 estrelas">' + estrelas + '</span>';
   }
 
@@ -1826,7 +1827,7 @@
               [1, 2, 3, 4, 5].map(function (n) {
                 return '<label class="estrela-op"><input type="radio" name="caract-estrelas-' + i + '" value="' + n + '"' +
                   (n === (item.estrelas || 3) ? ' checked' : '') + ' aria-label="' + n + (n === 1 ? ' estrela' : ' estrelas') + '">' +
-                  '<span aria-hidden="true">★</span></label>';
+                  '<span aria-hidden="true"></span></label>';
               }).join('') +
             '</span></div>';
         }
