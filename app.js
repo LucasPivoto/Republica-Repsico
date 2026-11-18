@@ -390,6 +390,11 @@
     faq: { pergunta: '', resposta: '' }
   };
   const CAMPOS_IMAGEM = { slides: 'imagem', galeria: 'imagem', mascotes: 'foto', moradores: 'foto' };
+  // Itens sem estes campos (ex.: recriados só com "ordem" por uma gravação concorrente) não são exibidos.
+  const OBRIGATORIOS = {
+    slides: ['titulo'], diferenciais: ['titulo'], galeria: ['imagem'], mascotes: ['nome'],
+    moradores: ['apelido'], eventos: ['titulo'], contatos: ['nome', 'telefone'], faq: ['pergunta']
+  };
 
   function normalizarItem(colecao, bruto, indice) {
     const item = Object.assign({}, PADROES_ITEM[colecao], bruto);
@@ -430,7 +435,10 @@
       const mapa = ehObjeto(e[col]) ? e[col] : {};
       const itens = {};
       Object.keys(mapa).forEach(function (id, i) {
-        if (/^[A-Za-z0-9_-]+$/.test(id) && ehObjeto(mapa[id])) itens[id] = normalizarItem(col, mapa[id], i);
+        if (!/^[A-Za-z0-9_-]+$/.test(id) || !ehObjeto(mapa[id])) return;
+        const item = normalizarItem(col, mapa[id], i);
+        const completo = OBRIGATORIOS[col].every(function (campo) { return String(item[campo] || '').trim() !== ''; });
+        if (completo) itens[id] = item;
       });
       saida[col] = itens;
     });
@@ -683,6 +691,8 @@
         aoMudar(conteudo);
       },
       obter: function () { return conteudo; },
+      conectado: function () { return true; },
+      aoMudarConexao: function () {},
       salvarItem: async function (colecao, id, dados) {
         validarAlvo(colecao, id);
         await alterar(function (c) { c[colecao][id] = clonar(dados); });
@@ -712,6 +722,7 @@
       lerImagem: function (id) {
         return imagens.ler(id).catch(function (e) { console.warn('Imagem indisponível:', id, e); return null; });
       },
+      lerImagemEstrita: function (id) { return imagens.ler(id); },
       excluirImagem: function (id) { return imagens.excluir(id); },
       substituirTudo: async function (novoConteudo, mapaImagens, aoProgresso) {
         const novo = normalizar(novoConteudo);
@@ -772,8 +783,17 @@
 
     const ref = F.doc(db, 'site', 'conteudo');
     const pedidos = new Map();
+    const ouvintesConexao = [];
     let conteudo = normalizar(lerCache());
+    let ultimoTexto = '';
+    let sincronizado = false;
     let aoMudar = function () {};
+
+    // Só grava com uma cópia confirmada pelo servidor: offline, o SDK mostraria um cache vazio
+    // (o conteúdo de exemplo) e a gravação sobrescreveria os dados reais ao reconectar.
+    function exigirConexao() {
+      if (!sincronizado) throw erroCom('offline');
+    }
 
     function limpo(v) { return JSON.parse(JSON.stringify(v)); }
     function ehMorador(usuario) {
@@ -801,7 +821,7 @@
       auth: {
         entrar: async function (senha) {
           await A.signInWithEmailAndPassword(auth, EMAIL_MORADORES, String(senha || ''));
-          await garantirDocumento();
+          try { await garantirDocumento(); } catch (e) { console.warn('Conteúdo será criado na primeira gravação:', e); }
         },
         sair: function () { return A.signOut(auth); },
         logado: function () { return ehMorador(auth.currentUser); },
@@ -821,10 +841,26 @@
             pronto = true;
             resolver();
           }
-          F.onSnapshot(ref, function (snap) {
-            conteudo = normalizar(snap.exists() ? snap.data() : null);
-            if (snap.exists()) gravarCache(conteudo);
-            aoMudar(conteudo);
+          F.onSnapshot(ref, { includeMetadataChanges: true }, function (snap) {
+            const doServidor = !snap.metadata.fromCache;
+            if (doServidor !== sincronizado) {
+              sincronizado = doServidor;
+              ouvintesConexao.forEach(function (cb) { cb(sincronizado); });
+            }
+            // Cache vazio do SDK (sem rede) não significa "documento inexistente": mantém o que já temos.
+            if (!doServidor && !snap.exists()) {
+              if (!pronto) aoMudar(conteudo);
+              terminar();
+              return;
+            }
+            const novo = normalizar(snap.exists() ? snap.data() : null);
+            const texto = JSON.stringify(novo);
+            if (!pronto || texto !== ultimoTexto) {
+              ultimoTexto = texto;
+              conteudo = novo;
+              if (doServidor && snap.exists()) gravarCache(conteudo);
+              aoMudar(conteudo);
+            }
             terminar();
           }, function (erro) {
             console.warn('Não foi possível ler o conteúdo do Firestore:', erro);
@@ -839,31 +875,43 @@
         });
       },
       obter: function () { return conteudo; },
+      conectado: function () { return sincronizado; },
+      aoMudarConexao: function (cb) { ouvintesConexao.push(cb); },
       salvarItem: async function (colecao, id, dados) {
+        exigirConexao();
         validarAlvo(colecao, id);
         const campos = {};
         campos[colecao + '.' + id] = limpo(normalizarItem(colecao, dados, 0));
         await atualizar(campos);
       },
       excluirItem: async function (colecao, id) {
+        exigirConexao();
         validarAlvo(colecao, id);
         const campos = {};
         campos[colecao + '.' + id] = F.deleteField();
         await atualizar(campos);
       },
       salvarConfig: async function (parcial) {
+        exigirConexao();
         const campos = {};
         Object.keys(parcial || {}).forEach(function (k) { campos['config.' + k] = limpo(parcial[k]); });
         await atualizar(campos);
       },
+      // Transação: só reordena itens que ainda existem no servidor (outro morador pode ter apagado).
       reordenar: async function (colecao, pares) {
-        const campos = {};
-        (pares || []).forEach(function (par) {
-          if (conteudo[colecao] && conteudo[colecao][par[0]]) campos[colecao + '.' + par[0] + '.ordem'] = par[1];
+        exigirConexao();
+        await F.runTransaction(db, async function (tx) {
+          const snap = await tx.get(ref);
+          const atual = snap.exists() ? snap.data() : {};
+          const campos = {};
+          (pares || []).forEach(function (par) {
+            if (atual[colecao] && atual[colecao][par[0]]) campos[colecao + '.' + par[0] + '.ordem'] = par[1];
+          });
+          if (Object.keys(campos).length) tx.update(ref, campos);
         });
-        if (Object.keys(campos).length) await atualizar(campos);
       },
       salvarImagem: async function (dataUrl) {
+        exigirConexao();
         if (!ehDataUrlImagem(dataUrl)) throw erroCom('formato-imagem');
         const id = gerarId();
         await F.setDoc(refImagem(id), { data: dataUrl, criadoEm: F.serverTimestamp() });
@@ -880,8 +928,17 @@
         }
         return pedidos.get(id);
       },
-      excluirImagem: function (id) { return F.deleteDoc(refImagem(id)); },
+      lerImagemEstrita: async function (id) {
+        exigirConexao();
+        const s = await F.getDoc(refImagem(id));
+        return s.exists() ? s.data().data : null;
+      },
+      excluirImagem: async function (id) {
+        exigirConexao();
+        await F.deleteDoc(refImagem(id));
+      },
       substituirTudo: async function (novoConteudo, mapaImagens, aoProgresso) {
+        exigirConexao();
         const novo = normalizar(novoConteudo);
         const antigas = coletarIdsImagens(conteudo);
         const ids = Object.keys(mapaImagens || {}).filter(function (id) {
@@ -912,8 +969,11 @@
       auth: { entrar: recusar, sair: async function () {}, logado: function () { return false; }, aoMudar: function () {}, trocarSenha: recusar },
       iniciar: async function (cb) { if (cb) cb(conteudo); },
       obter: function () { return conteudo; },
+      conectado: function () { return false; },
+      aoMudarConexao: function () {},
       salvarItem: recusar, excluirItem: recusar, salvarConfig: recusar, reordenar: recusar,
-      salvarImagem: recusar, lerImagem: async function () { return null; }, excluirImagem: recusar, substituirTudo: recusar
+      salvarImagem: recusar, lerImagem: async function () { return null; }, lerImagemEstrita: recusar,
+      excluirImagem: recusar, substituirTudo: recusar
     };
   }
 
@@ -927,7 +987,7 @@
      7. RENDERIZAÇÃO
      ====================================================================== */
 
-  const estado = { conteudo: normalizar(null), admin: false, filtroMoradores: 'todos' };
+  const estado = { conteudo: normalizar(null), admin: false, filtroMoradores: 'todos', conectado: true };
   let store = null;
 
   function renderizarTudo() {
@@ -1492,13 +1552,17 @@
     const varios = itens.length > 1;
     el.innerHTML =
       '<div class="lightbox-fundo" data-acao="lightbox-fechar"></div>' +
-      '<figure class="lightbox-conteudo" role="dialog" aria-modal="true" aria-label="Foto ampliada">' +
+      '<figure class="lightbox-conteudo">' +
         '<img class="lightbox-img" alt="" draggable="false">' +
         '<figcaption><span class="lightbox-legenda"></span><span class="lightbox-contador"></span></figcaption>' +
       '</figure>' +
       '<button type="button" class="lightbox-btn lightbox-fechar" data-acao="lightbox-fechar" aria-label="Fechar foto">' + icone('fechar') + '</button>' +
       (varios ? '<button type="button" class="lightbox-btn lightbox-anterior" data-acao="lightbox-anterior" aria-label="Foto anterior">' + icone('seta-esq') + '</button>' +
         '<button type="button" class="lightbox-btn lightbox-proximo" data-acao="lightbox-proximo" aria-label="Próxima foto">' + icone('seta-dir') + '</button>' : '');
+    // O diálogo é o próprio #lightbox, para que os botões (fechar, anterior, próxima) fiquem dentro dele.
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    el.setAttribute('aria-label', 'Foto ampliada');
     el.hidden = false;
     document.documentElement.classList.add('sem-rolagem');
     mostrarFotoLightbox();
@@ -1666,6 +1730,15 @@
     return '<img alt="Prévia da foto">';
   }
 
+  // Compressões em andamento: o envio do formulário espera por elas (senão a foto seria descartada).
+  function rastrearCompressao(form, tarefa) {
+    form.pendentes = form.pendentes || new Set();
+    const promessa = tarefa();
+    form.pendentes.add(promessa);
+    promessa.then(function () { form.pendentes.delete(promessa); });
+    return promessa;
+  }
+
   function aplicarPrevias(raiz, itens) {
     raiz.querySelectorAll('img:not([data-img])').forEach(function (img, i) {
       const novos = itens.filter(function (x) { return x && x.novo; });
@@ -1702,20 +1775,22 @@
           caixa.querySelector('[data-acao="remover-imagem"]').hidden = !caixa.valorAtual;
         };
         caixa.desenhar();
-        caixa.querySelector('input[type="file"]').addEventListener('change', async function (ev) {
+        caixa.querySelector('input[type="file"]').addEventListener('change', function (ev) {
           const arquivo = ev.target.files[0];
           ev.target.value = '';
           if (!arquivo) return;
-          const status = caixa.querySelector('.status-imagem');
-          status.textContent = 'Comprimindo…';
-          try {
-            caixa.valorAtual = { novo: await comprimirImagem(arquivo) };
-            caixa.desenhar();
-          } catch (e) {
-            toast(mensagemErro(e), 'erro');
-          } finally {
-            status.textContent = '';
-          }
+          rastrearCompressao(form, async function () {
+            const status = caixa.querySelector('.status-imagem');
+            status.textContent = 'Comprimindo…';
+            try {
+              caixa.valorAtual = { novo: await comprimirImagem(arquivo) };
+              caixa.desenhar();
+            } catch (e) {
+              toast(mensagemErro(e), 'erro');
+            } finally {
+              status.textContent = '';
+            }
+          });
         });
       },
       valor: function (form, c) {
@@ -1748,22 +1823,28 @@
           aplicarPrevias(mini, caixa.lista);
         };
         caixa.desenhar();
-        caixa.querySelector('input[type="file"]').addEventListener('change', async function (ev) {
+        caixa.querySelector('input[type="file"]').addEventListener('change', function (ev) {
           const arquivos = Array.from(ev.target.files);
           ev.target.value = '';
-          const vagas = max - caixa.lista.length;
+          const vagas = max - caixa.lista.length - (caixa.reservadas || 0);
           if (arquivos.length > vagas) toast(c.mensagemMax || 'Máximo de ' + max + ' fotos.', 'erro');
-          const status = caixa.querySelector('.status-imagem');
-          for (const arquivo of arquivos.slice(0, Math.max(vagas, 0))) {
-            status.textContent = 'Comprimindo…';
-            try {
-              caixa.lista.push({ novo: await comprimirImagem(arquivo) });
-              caixa.desenhar();
-            } catch (e) {
-              toast(mensagemErro(e), 'erro');
+          const aceitos = arquivos.slice(0, Math.max(vagas, 0));
+          caixa.reservadas = (caixa.reservadas || 0) + aceitos.length;
+          rastrearCompressao(form, async function () {
+            const status = caixa.querySelector('.status-imagem');
+            for (const arquivo of aceitos) {
+              status.textContent = 'Comprimindo…';
+              try {
+                caixa.lista.push({ novo: await comprimirImagem(arquivo) });
+                caixa.desenhar();
+              } catch (e) {
+                toast(mensagemErro(e), 'erro');
+              } finally {
+                caixa.reservadas--;
+              }
             }
-          }
-          status.textContent = '';
+            status.textContent = '';
+          });
         });
       },
       valor: function (form, c) {
@@ -1821,6 +1902,15 @@
     });
     form.addEventListener('submit', async function (ev) {
       ev.preventDefault();
+      const enviar = form.querySelector('button[type="submit"]');
+      if (form.pendentes && form.pendentes.size) {
+        const rotulo = enviar.textContent;
+        enviar.disabled = true;
+        enviar.textContent = 'Aguardando fotos…';
+        await Promise.all(Array.from(form.pendentes));
+        enviar.textContent = rotulo;
+        enviar.disabled = false;
+      }
       form.querySelectorAll('.erro-campo').forEach(function (e) { e.hidden = true; e.textContent = ''; });
       const valores = coletarValores(form, campos);
       let primeiroErro = null;
@@ -1967,6 +2057,11 @@
   function atualizarBarraMorador() {
     const toggle = document.getElementById('toggle-vagas');
     if (!toggle) return;
+    const indicador = document.querySelector('#barra-morador .indicador-modo');
+    if (store && store.modo === 'firebase') {
+      indicador.textContent = estado.conectado ? 'Firebase' : 'Firebase — sem conexão (edição pausada)';
+      indicador.classList.toggle('sem-conexao', !estado.conectado);
+    }
     const abertas = estado.conteudo.config.vagasAbertas;
     toggle.checked = abertas;
     toggle.closest('.interruptor').querySelector('.interruptor-rotulo').textContent = abertas ? 'Vagas abertas' : 'Casa completa';
@@ -2305,13 +2400,29 @@
   }
 
   async function exportarBackup() {
+    if (!store.conectado()) {
+      toast(mensagemErro({ codigo: 'offline' }), 'erro');
+      return;
+    }
+    const conteudo = clonar(estado.conteudo);
+    const imagens = {};
+    const ids = coletarIdsImagens(conteudo);
+    let faltando = 0;
+    const progresso = toast('Preparando backup…', 'ok', 0);
     try {
-      const conteudo = clonar(estado.conteudo);
-      const imagens = {};
-      for (const id of coletarIdsImagens(conteudo)) {
-        const url = await store.lerImagem(id);
-        if (url) imagens[id] = url;
+      for (let i = 0; i < ids.length; i++) {
+        progresso.textContent = 'Preparando backup… fotos ' + (i + 1) + '/' + ids.length;
+        const url = imagensProntas.get(ids[i]) || await store.lerImagemEstrita(ids[i]);
+        if (url) imagens[ids[i]] = url; else faltando++;
       }
+    } catch (e) {
+      console.error(e);
+      progresso.fechar();
+      toast('Não foi possível ler todas as fotos para o backup. Verifique a conexão e tente de novo.', 'erro');
+      return;
+    }
+    progresso.fechar();
+    try {
       const dados = { app: 'repsico', formato: 1, exportadoEm: new Date().toISOString(), conteudo: conteudo, imagens: imagens };
       const url = URL.createObjectURL(new Blob([JSON.stringify(dados)], { type: 'application/json' }));
       const link = document.createElement('a');
@@ -2321,7 +2432,9 @@
       link.click();
       link.remove();
       setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
-      toast('Backup exportado!');
+      toast(faltando
+        ? 'Backup exportado, mas ' + faltando + (faltando === 1 ? ' foto não foi encontrada.' : ' fotos não foram encontradas.')
+        : 'Backup exportado!');
     } catch (e) {
       console.error(e);
       toast(mensagemErro(e), 'erro');
@@ -2329,6 +2442,10 @@
   }
 
   async function importarBackup(arquivo) {
+    if (!store.conectado()) {
+      toast(mensagemErro({ codigo: 'offline' }), 'erro');
+      return;
+    }
     let dados = null;
     try { dados = JSON.parse(await arquivo.text()); } catch (e) { dados = null; }
     if (!ehObjeto(dados) || dados.app !== 'repsico' || dados.formato !== 1 || !ehObjeto(dados.conteudo)) {
@@ -2520,6 +2637,11 @@
     } else {
       store = criarStoreLocal();
     }
+    estado.conectado = store.conectado();
+    store.aoMudarConexao(function (conectado) {
+      estado.conectado = conectado;
+      atualizarBarraMorador();
+    });
     await store.iniciar(function (c) {
       estado.conteudo = c;
       renderizarTudo();

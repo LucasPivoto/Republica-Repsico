@@ -31,6 +31,8 @@ A logo já está na raiz como `logo-repsico.png`. Para trocar, salve a nova imag
 
 > No modo local, as alterações ficam salvas **só no navegador de quem editou**. Os visitantes continuam vendo o conteúdo inicial. Serve para testar e para ir cadastrando. Depois, leve tudo para o Firebase com o backup (seção 5).
 
+> ⚠️ Exporte o backup do modo local **antes** de colar o `firebaseConfig` e publicar. Depois disso o site passa a usar o Firebase e não enxerga mais o que foi salvo no navegador. Na Área do Morador, use **Exportar** e guarde o arquivo `.json`.
+
 ## 3. Publicar no GitHub Pages
 
 1. Coloque os arquivos na branch `main` do repositório.
