@@ -1302,6 +1302,8 @@
     const cores = m.time ? coresTime(m.time) : null;
     const curso = [m.curso, m.anoEntrada ? 'desde ' + m.anoEntrada : ''].filter(Boolean).join(' · ');
     return '<article class="card-morador">' +
+      '<button type="button" class="morador-abrir" data-acao="abrir-ficha" data-id="' + escapeHtml(m.id) +
+        '" aria-label="Ver ficha de ' + escapeHtml(m.apelido) + '"></button>' +
       '<div class="morador-foto">' +
         (m.foto ? imgTag(m.foto, 'Foto de ' + m.apelido) : '<div class="placeholder-iniciais" aria-hidden="true">' + escapeHtml(iniciais(m.apelido)) + '</div>') +
         '<span class="badge-categoria categoria-' + m.categoria + '">' + CATEGORIAS[m.categoria] + '</span>' +
@@ -1319,6 +1321,59 @@
       '</div>' +
       controlesItem('moradores', m.id, false) +
     '</article>';
+  }
+
+  /* ---- Ficha do morador (janela sobreposta) ---- */
+  function htmlEstrelas(n) {
+    let estrelas = '';
+    for (let i = 1; i <= 5; i++) estrelas += '<span class="' + (i <= n ? 'cheia' : 'vazia') + '">★</span>';
+    return '<span class="estrelas" role="img" aria-label="' + n + ' de 5 estrelas">' + estrelas + '</span>';
+  }
+
+  function abrirFicha(id, origem) {
+    const m = estado.conteudo.moradores[id];
+    if (!m) return;
+    const el = document.getElementById('modal-ficha');
+    const cores = m.time ? coresTime(m.time) : null;
+    const sub = [m.nome, m.curso].filter(Boolean).join(' · ');
+    const selos = '<span class="badge-categoria categoria-' + m.categoria + '">' + CATEGORIAS[m.categoria] + '</span>' +
+      (m.time ? '<span class="badge-time' + (cores ? '' : ' neutro') + '"' +
+        (cores ? ' style="background:' + cores[0] + ';color:' + cores[1] + '"' : '') + '>' + icone('bola') + escapeHtml(m.time) + '</span>' : '') +
+      (m.instagram ? '<a class="btn-instagram" href="https://instagram.com/' + escapeHtml(m.instagram) + '" target="_blank" rel="noopener">' +
+        icone('instagram') + '@' + escapeHtml(m.instagram) + '</a>' : '');
+    const tabela = m.caracteristicas.length
+      ? '<table class="ficha-tabela"><thead><tr><th scope="col">Características</th><th scope="col">Nível</th></tr></thead><tbody>' +
+        m.caracteristicas.map(function (c) {
+          return '<tr><td>' + escapeHtml(c.nome) + '</td><td>' + htmlEstrelas(c.estrelas) + '</td></tr>';
+        }).join('') + '</tbody></table>'
+      : '';
+    el.innerHTML =
+      '<div class="modal-fundo" data-acao="fechar-modal"></div>' +
+      '<div class="modal-caixa ficha" role="dialog" aria-modal="true" aria-labelledby="titulo-ficha">' +
+        '<div class="ficha-topo"><img src="logo-repsico.png" alt="" width="36" height="36">' +
+          '<h2 id="titulo-ficha">REPSICO · Ficha do morador</h2>' +
+          '<button type="button" class="btn-icone" data-acao="fechar-modal" aria-label="Fechar ficha">' + icone('fechar') + '</button></div>' +
+        '<div class="ficha-corpo">' +
+          '<div class="ficha-foto">' + (m.foto ? imgTag(m.foto, 'Foto de ' + m.apelido)
+            : '<div class="placeholder-iniciais" aria-hidden="true">' + escapeHtml(iniciais(m.apelido)) + '</div>') + '</div>' +
+          '<div class="ficha-dados">' +
+            '<div class="ficha-cabecalho">' +
+              '<p class="ficha-campo"><span class="ficha-rotulo">NOME:</span> <strong class="ficha-apelido">' + escapeHtml(m.apelido) + '</strong></p>' +
+              (m.anoEntrada ? '<p class="ficha-campo"><span class="ficha-rotulo">ANO:</span> <strong class="ficha-ano">' + m.anoEntrada + '</strong></p>' : '') +
+            '</div>' +
+            (sub ? '<p class="ficha-sub">' + escapeHtml(sub) + '</p>' : '') +
+            '<div class="ficha-selos">' + selos + '</div>' +
+            tabela +
+            (m.lema ? '<div class="ficha-lema-bloco"><p class="ficha-rotulo">LEMA DO MORADOR:</p>' +
+              '<blockquote class="ficha-lema">“' + escapeHtml(m.lema) + '”</blockquote></div>' : '') +
+            (estado.admin ? '<button type="button" class="btn btn-primario btn-pequeno ficha-editar" data-acao="editar-ficha" data-id="' +
+              escapeHtml(id) + '">' + icone('editar') + 'Editar</button>' : '') +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    abrirModal(el, origem);
+    hidratarImagens(el);
+    el.querySelector('.ficha-topo [data-acao="fechar-modal"]').focus();
   }
 
   /* ---- Eventos & Rolês ---- */
@@ -2547,6 +2602,11 @@
     'abrir-galeria': function (alvo) {
       const itens = listar(estado.conteudo, 'galeria').map(function (g) { return { img: g.imagem, legenda: g.legenda }; });
       abrirLightbox(itens, Number(alvo.dataset.indice) || 0);
+    },
+    'abrir-ficha': function (alvo) { abrirFicha(alvo.dataset.id, alvo); },
+    'editar-ficha': function (alvo) {
+      fecharModal(document.getElementById('modal-ficha'));
+      abrirFormularioColecao('moradores', alvo.dataset.id);
     },
     'filtrar-moradores': function (alvo) {
       estado.filtroMoradores = alvo.dataset.filtro || 'todos';
