@@ -39,9 +39,11 @@ A logo já está na raiz como `logo-repsico.png`. Para trocar, salve a nova imag
 2. No GitHub, vá em **Settings → Pages**.
 3. Em **Build and deployment**, escolha **Source: Deploy from a branch**.
 4. Selecione **Branch: `main`** e a pasta **`/ (root)`** e clique em **Save**.
-5. Em cerca de 1 minuto o site fica no ar em `https://lucaspivoto.github.io/Republica-Repsico/`.
+5. Em cerca de 1 minuto o site fica no ar em `https://repsico.github.io/`.
+   - O endereço vem do nome da organização (`repsico`).
+   - Como o repositório se chama `repsico.github.io`, o site fica na raiz, sem nada depois da barra.
 
-> A prévia do link no WhatsApp usa a logo pelo endereço acima (`og:image` no `index.html`). Se o endereço mudar (domínio próprio, outro repositório), atualize essa linha.
+> A prévia do link no WhatsApp usa a logo pelo endereço acima (`og:url` e `og:image` no `index.html`). Se o endereço mudar (domínio próprio, outro repositório), atualize essas duas linhas.
 
 ## 4. Firebase grátis em 3 minutos
 
